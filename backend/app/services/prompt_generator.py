@@ -47,10 +47,27 @@ class PromptGenerator:
                     print(f"[PromptGenerator] Warning: Example {file_id} not found, skipping")
                     continue
 
-                # Construct file path
-                file_path = Path("examples") / example["name"]
-                if not file_path.exists():
-                    print(f"[PromptGenerator] Warning: File not found at {file_path}, skipping")
+                # Construct file path - check both with original name and with file_id
+                file_found = False
+                file_path = None
+
+                # Try with file ID and different extensions
+                for ext in ['.docx', '.doc', '.md', '.markdown']:
+                    potential_path = Path("examples") / f"{file_id}{ext}"
+                    if potential_path.exists():
+                        file_path = potential_path
+                        file_found = True
+                        break
+
+                # Also try with original filename
+                if not file_found:
+                    potential_path = Path("examples") / example["name"]
+                    if potential_path.exists():
+                        file_path = potential_path
+                        file_found = True
+
+                if not file_found:
+                    print(f"[PromptGenerator] Warning: File not found for {file_id} ({example['name']}), skipping")
                     continue
 
                 # Read example file
@@ -96,7 +113,7 @@ class PromptGenerator:
             Dictionary with generated prompt template
         """
         # Get all example file IDs
-        examples = self.example_manager.list_examples()
+        examples = self.example_manager.get_all_examples()
         if not examples:
             raise ValueError("No example documents available")
 

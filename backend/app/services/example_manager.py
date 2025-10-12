@@ -90,3 +90,19 @@ class ExampleManager:
             List of example file metadata
         """
         return ExampleManager.load_index()
+
+    @staticmethod
+    def get_example_by_id(file_id: str) -> Dict[str, str]:
+        """Get example file by ID
+
+        Args:
+            file_id: File ID to search for
+
+        Returns:
+            Example file metadata or None if not found
+        """
+        examples = ExampleManager.load_index()
+        for example in examples:
+            if example['id'] == file_id:
+                return example
+        return None
