@@ -63,28 +63,17 @@ function App() {
       }
     };
 
-    const loadTemplates = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/api/prompts/templates');
-        const allTemplates: PromptTemplate[] = await response.json();
-
-        const grouped = allTemplates.reduce((acc, template) => {
-          if (!acc[template.chapter]) {
-            acc[template.chapter] = [];
-          }
-          acc[template.chapter].push(template);
-          return acc;
-        }, {} as { [key: string]: PromptTemplate[] });
-
-        setTemplates(grouped);
-      } catch (error) {
-        console.error('Failed to load templates:', error);
-      }
-    };
-
     loadExamples();
     loadTemplates();
   }, []);
+
+  // Reload templates when switching to report tab
+  useEffect(() => {
+    if (activeTab === 'report') {
+      console.log('[App] Switching to report tab, reloading templates');
+      loadTemplates();
+    }
+  }, [activeTab]);
 
   // 每个章节独立的数据
   const [chapterData, setChapterData] = useState<ChapterData>({
@@ -104,6 +93,27 @@ function App() {
 
   const [activeTab, setActiveTab] = useState<string>('report');
   const [activeChapter, setActiveChapter] = useState<ChapterType>('chapter_1');
+
+  // Load templates function
+  const loadTemplates = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/prompts/templates');
+      const allTemplates: PromptTemplate[] = await response.json();
+
+      const grouped = allTemplates.reduce((acc, template) => {
+        if (!acc[template.chapter]) {
+          acc[template.chapter] = [];
+        }
+        acc[template.chapter].push(template);
+        return acc;
+      }, {} as { [key: string]: PromptTemplate[] });
+
+      setTemplates(grouped);
+      console.log('[App] Templates loaded:', grouped);
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+    }
+  };
 
   // Prompt templates
   const [templates, setTemplates] = useState<{ [key: string]: PromptTemplate[] }>({
