@@ -105,3 +105,28 @@ export const generatePromptFromExamples = async (
   );
   return response.data;
 };
+
+// Generate prompts for all chapters in batch
+export interface BatchGenerateResponse {
+  success: boolean;
+  total_chapters: number;
+  successful: number;
+  failed: number;
+  results: Array<{
+    chapter: string;
+    success: boolean;
+    template_id?: string;
+    analyzed_examples?: number;
+    error?: string;
+  }>;
+}
+
+export const generateAllChaptersPrompts = async (
+  exampleFileIds?: string[]
+): Promise<BatchGenerateResponse> => {
+  const response = await axios.post<BatchGenerateResponse>(
+    `${API_BASE_URL}/prompts/generate-all-chapters`,
+    { example_file_ids: exampleFileIds || null }
+  );
+  return response.data;
+};

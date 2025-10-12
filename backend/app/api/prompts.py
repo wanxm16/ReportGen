@@ -197,3 +197,85 @@ async def generate_prompt_from_examples(request: GeneratePromptRequest):
             status_code=500,
             detail=f"Failed to generate prompt: {str(e)}"
         )
+
+
+@router.post("/generate-all-chapters")
+async def generate_all_chapters_prompts(example_file_ids: Optional[List[str]] = None):
+    """Generate prompt templates for all chapters sequentially
+
+    This endpoint analyzes example documents and generates prompts for all chapters
+    in sequence (chapter_1, chapter_2, etc.). Each chapter is processed one at a time.
+
+    Args:
+        example_file_ids: Optional list of example file IDs to use
+
+    Returns:
+        Results for each chapter generation
+    """
+    try:
+        generator = PromptGenerator()
+
+        # Define all chapters in order
+        chapters = ["chapter_1", "chapter_2"]  # Can extend to chapter_3, chapter_4, etc.
+
+        results = []
+
+        print(f"[API] Starting batch generation for {len(chapters)} chapters")
+
+        for chapter in chapters:
+            print(f"[API] Generating prompt for {chapter}...")
+
+            try:
+                # Generate prompt for this chapter
+                if not example_file_ids:
+                    result = generator.generate_from_all_examples(chapter_type=chapter)
+                else:
+                    result = generator.generate_from_examples(
+                        example_file_ids=example_file_ids,
+                        chapter_type=chapter
+                    )
+
+                # Save the generated template
+                from ..services.prompt_manager import PromptManager
+                template = PromptManager.create_template(
+                    chapter=chapter,
+                    name=f"AI 批量生成 - {chapter}",
+                    system_prompt=result["system_prompt"],
+                    user_prompt_template=result["user_prompt_template"],
+                    is_default=False
+                )
+
+                results.append({
+                    "chapter": chapter,
+                    "success": True,
+                    "template_id": template["id"],
+                    "analyzed_examples": result["analyzed_examples"]
+                })
+
+                print(f"[API] Successfully generated and saved template for {chapter}")
+
+            except Exception as e:
+                print(f"[API] Error generating {chapter}: {type(e).__name__}: {str(e)}")
+                results.append({
+                    "chapter": chapter,
+                    "success": False,
+                    "error": str(e)
+                })
+
+        # Count successes
+        success_count = sum(1 for r in results if r["success"])
+
+        return {
+            "success": True,
+            "total_chapters": len(chapters),
+            "successful": success_count,
+            "failed": len(chapters) - success_count,
+            "results": results
+        }
+
+    except Exception as e:
+        print(f"[API] Error in batch generation: {type(e).__name__}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Batch generation failed: {str(e)}"
+        )

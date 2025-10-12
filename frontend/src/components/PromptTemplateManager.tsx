@@ -21,9 +21,10 @@ import {
   StarOutlined,
   StarFilled,
   QuestionCircleOutlined,
-  BulbOutlined
+  BulbOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
-import { generatePromptFromExamples, getAllExamples } from '../services/api';
+import { generatePromptFromExamples, getAllExamples, generateAllChaptersPrompts } from '../services/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -216,6 +217,77 @@ export const PromptTemplateManager: React.FC = () => {
     });
   };
 
+  const handleBatchGenerate = async () => {
+    if (!hasExamples) {
+      message.warning('请先上传示例文档');
+      return;
+    }
+
+    Modal.confirm({
+      title: '批量生成所有章节 Prompt',
+      content: (
+        <div>
+          <p>将自动分析示例文档，依次生成所有章节的 Prompt 模板：</p>
+          <ul>
+            <li>一、全区社会治理基本情况</li>
+            <li>二、高频社会治理问题隐患分析研判</li>
+          </ul>
+          <p>每个章节将：</p>
+          <ul>
+            <li>从示例文档中提取对应章节内容</li>
+            <li>分析该章节的写作风格和格式要求</li>
+            <li>生成专属的 Prompt 模板并自动保存</li>
+          </ul>
+          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+            注意：批量生成需要较长时间（约 30-60 秒），请耐心等待
+          </p>
+        </div>
+      ),
+      okText: '开始批量生成',
+      cancelText: '取消',
+      width: 600,
+      onOk: async () => {
+        setGenerating(true);
+        try {
+          message.loading({ content: '正在批量生成所有章节 Prompt...', key: 'batch-gen', duration: 0 });
+
+          const result = await generateAllChaptersPrompts();
+
+          if (result.success) {
+            message.success({
+              content: `批量生成完成！成功 ${result.successful} 个，失败 ${result.failed} 个`,
+              key: 'batch-gen',
+              duration: 5
+            });
+
+            // Show detailed results
+            const successChapters = result.results.filter(r => r.success).map(r => r.chapter);
+            const failedChapters = result.results.filter(r => !r.success);
+
+            if (successChapters.length > 0) {
+              message.info(`成功生成章节：${successChapters.join(', ')}`);
+            }
+            if (failedChapters.length > 0) {
+              failedChapters.forEach(fc => {
+                message.error(`${fc.chapter} 生成失败：${fc.error}`);
+              });
+            }
+
+            // Reload templates
+            loadTemplates();
+          } else {
+            message.error({ content: '批量生成失败', key: 'batch-gen' });
+          }
+        } catch (error: any) {
+          message.error({ content: error.message || '批量生成失败', key: 'batch-gen' });
+          console.error('Batch generate error:', error);
+        } finally {
+          setGenerating(false);
+        }
+      }
+    });
+  };
+
   const groupedTemplates = templates.reduce((acc, template) => {
     if (!acc[template.chapter]) {
       acc[template.chapter] = [];
@@ -235,9 +307,19 @@ export const PromptTemplateManager: React.FC = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: 'flex', gap: '8px' }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建模板
+        </Button>
+        <Button
+          type="default"
+          icon={<ThunderboltOutlined />}
+          onClick={handleBatchGenerate}
+          loading={generating}
+          disabled={!hasExamples}
+          style={{ backgroundColor: '#52c41a', color: 'white', borderColor: '#52c41a' }}
+        >
+          一键生成所有章节
         </Button>
       </div>
 
