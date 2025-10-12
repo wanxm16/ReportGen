@@ -4,6 +4,8 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from ..constants import CHAPTER_DISPLAY_NAMES
+
 load_dotenv()
 
 
@@ -153,12 +155,7 @@ class LLMService:
             Dictionary with 'system_prompt' and 'user_prompt_template'
         """
         # Build analysis prompt
-        chapter_names = {
-            "chapter_1": "全区社会治理基本情况",
-            "chapter_2": "高频社会治理问题隐患分析研判"
-        }
-
-        chapter_name = chapter_names.get(chapter_type, chapter_type)
+        chapter_name = CHAPTER_DISPLAY_NAMES.get(chapter_type, chapter_type)
 
         # Combine all examples
         examples_text = "\n\n---\n\n".join([

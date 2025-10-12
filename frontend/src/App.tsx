@@ -17,20 +17,14 @@ import './App.css';
 
 const { Header, Content } = Layout;
 
-interface ChapterContent {
-  chapter_1: string;
-  chapter_2: string;
-}
-
-interface ChapterData {
-  chapter_1: string;
-  chapter_2: string;
-}
+type ChapterRecord<T> = Record<ChapterType, T>;
+type ChapterContent = ChapterRecord<string>;
+type ChapterData = ChapterRecord<string>;
 
 interface PromptTemplate {
   id: string;
   name: string;
-  chapter: string;
+  chapter: ChapterType;
   system_prompt: string;
   user_prompt_template: string;
   is_default: boolean;
@@ -43,11 +37,63 @@ interface ExampleFile {
   name: string;
 }
 
+const CHAPTERS: Array<{ key: ChapterType; label: string; exportName: string }> = [
+  { key: 'chapter_1', label: '一、全区社会治理基本情况', exportName: '全区社会治理基本情况' },
+  { key: 'chapter_2', label: '二、高频社会治理问题隐患分析研判', exportName: '高频社会治理问题隐患分析研判' },
+  { key: 'chapter_3', label: '三、社情民意热点问题分析预警', exportName: '社情民意热点问题分析预警' },
+  { key: 'chapter_4', label: '四、事件处置解决情况分析', exportName: '事件处置解决情况分析' }
+];
+
+const DATA_PLACEHOLDER = '请粘贴 CSV 或 Markdown 格式的数据&#10;&#10;CSV 示例：&#10;事件ID,事件类型,等级,街镇&#10;E001,城市管理,三级,街道A&#10;E002,环境保护,二级,街道B&#10;&#10;或直接粘贴 Markdown 表格';
+
+const CHAPTER_NAME_MAP = CHAPTERS.reduce((acc, { key, exportName }) => {
+  acc[key] = exportName;
+  return acc;
+}, {} as ChapterRecord<string>);
+
+const createChapterRecord = <T,>(factory: T | (() => T)): ChapterRecord<T> =>
+  CHAPTERS.reduce((acc, { key }) => {
+    acc[key] = typeof factory === 'function' ? (factory as () => T)() : factory;
+    return acc;
+  }, {} as ChapterRecord<T>);
+
 function App() {
   // 全局示例文档
   const [exampleFiles, setExampleFiles] = useState<ExampleFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loadingExamples, setLoadingExamples] = useState(true);
+
+  // State definitions (must come before useEffect)
+  const [chapterData, setChapterData] = useState<ChapterData>(() => createChapterRecord(''));
+
+  const [chapterContents, setChapterContents] = useState<ChapterContent>(() => createChapterRecord(''));
+
+  const [loading, setLoading] = useState<ChapterRecord<boolean>>(() => createChapterRecord(false));
+
+  const [activeTab, setActiveTab] = useState<string>('report');
+  const [activeChapter, setActiveChapter] = useState<ChapterType>('chapter_1');
+
+  // Prompt templates
+  const [templates, setTemplates] = useState<ChapterRecord<PromptTemplate[]>>(() => createChapterRecord(() => []));
+  const [selectedTemplates, setSelectedTemplates] = useState<ChapterRecord<string>>(() => createChapterRecord(''));
+
+  // Load templates function
+  const loadTemplates = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/prompts/templates');
+      const allTemplates: PromptTemplate[] = await response.json();
+
+      const grouped = createChapterRecord<PromptTemplate[]>(() => []);
+      allTemplates.forEach(template => {
+        grouped[template.chapter].push(template);
+      });
+
+      setTemplates(grouped);
+      console.log('[App] Templates loaded:', grouped);
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+    }
+  };
 
   // Load saved examples and templates on mount
   useEffect(() => {
@@ -74,56 +120,6 @@ function App() {
       loadTemplates();
     }
   }, [activeTab]);
-
-  // 每个章节独立的数据
-  const [chapterData, setChapterData] = useState<ChapterData>({
-    chapter_1: '',
-    chapter_2: ''
-  });
-
-  const [chapterContents, setChapterContents] = useState<ChapterContent>({
-    chapter_1: '',
-    chapter_2: ''
-  });
-
-  const [loading, setLoading] = useState<{ [key: string]: boolean }>({
-    chapter_1: false,
-    chapter_2: false
-  });
-
-  const [activeTab, setActiveTab] = useState<string>('report');
-  const [activeChapter, setActiveChapter] = useState<ChapterType>('chapter_1');
-
-  // Load templates function
-  const loadTemplates = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/prompts/templates');
-      const allTemplates: PromptTemplate[] = await response.json();
-
-      const grouped = allTemplates.reduce((acc, template) => {
-        if (!acc[template.chapter]) {
-          acc[template.chapter] = [];
-        }
-        acc[template.chapter].push(template);
-        return acc;
-      }, {} as { [key: string]: PromptTemplate[] });
-
-      setTemplates(grouped);
-      console.log('[App] Templates loaded:', grouped);
-    } catch (error) {
-      console.error('Failed to load templates:', error);
-    }
-  };
-
-  // Prompt templates
-  const [templates, setTemplates] = useState<{ [key: string]: PromptTemplate[] }>({
-    chapter_1: [],
-    chapter_2: []
-  });
-  const [selectedTemplates, setSelectedTemplates] = useState<{ [key: string]: string }>({
-    chapter_1: '',
-    chapter_2: ''
-  });
 
   // Handle example file upload
   const handleUploadExample = async (file: File) => {
@@ -232,18 +228,15 @@ function App() {
     }
 
     try {
-      const chapterNames = {
-        chapter_1: '全区社会治理基本情况',
-        chapter_2: '高频社会治理问题隐患分析研判'
-      };
+      const exportName = CHAPTER_NAME_MAP[chapter];
 
-      const blob = await exportToWord(content, chapterNames[chapter]);
+      const blob = await exportToWord(content, exportName);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${chapterNames[chapter]}.docx`;
+      a.download = `${exportName}.docx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -255,162 +248,87 @@ function App() {
     }
   };
 
+  const renderChapterPanel = (chapter: ChapterType) => (
+    <div style={{ display: 'flex', gap: '16px' }}>
+      <div style={{ flex: '0 0 450px' }}>
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <DataInput
+            title="输入数据"
+            placeholder={DATA_PLACEHOLDER}
+            value={chapterData[chapter]}
+            onChange={(value) => setChapterData(prev => ({ ...prev, [chapter]: value }))}
+            rows={25}
+          />
+
+          {exampleFiles.length > 0 && (
+            <div
+              style={{
+                padding: '12px',
+                background: '#f0f9ff',
+                border: '1px solid #91caff',
+                borderRadius: '6px',
+                fontSize: '13px'
+              }}
+            >
+              <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                📚 已加载 {exampleFiles.length} 个示例文档
+              </div>
+              <div style={{ color: '#666' }}>
+                {exampleFiles.map(f => f.name).join(', ')}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>选择Prompt模板</div>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="使用默认模板"
+              allowClear
+              value={selectedTemplates[chapter] || undefined}
+              onChange={(value) => setSelectedTemplates(prev => ({ ...prev, [chapter]: value || '' }))}
+            >
+              {templates[chapter].map(template => (
+                <Select.Option key={template.id} value={template.id}>
+                  {template.name} {template.is_default && '(默认)'}
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          <Button
+            type="primary"
+            size="large"
+            block
+            onClick={() => handleGenerate(chapter)}
+            loading={loading[chapter]}
+            disabled={!chapterData[chapter].trim()}
+          >
+            生成报告
+          </Button>
+        </Space>
+      </div>
+
+      <div style={{ flex: 1 }}>
+        <ReportEditor
+          content={chapterContents[chapter]}
+          onChange={(content) => handleContentChange(chapter, content)}
+          onExport={() => handleExport(chapter)}
+          loading={loading[chapter]}
+        />
+      </div>
+    </div>
+  );
+
   const renderReportContent = () => (
     <Tabs
       activeKey={activeChapter}
       onChange={(key) => setActiveChapter(key as ChapterType)}
-      items={[
-        {
-          key: 'chapter_1',
-          label: '一、全区社会治理基本情况',
-          children: (
-            <div style={{ display: 'flex', gap: '16px' }}>
-              {/* Left: Data Input */}
-              <div style={{ flex: '0 0 450px' }}>
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  <DataInput
-                    title="输入数据"
-                    placeholder="请粘贴 CSV 或 Markdown 格式的数据&#10;&#10;CSV 示例：&#10;事件ID,事件类型,等级,街镇&#10;E001,城市管理,三级,街道A&#10;E002,环境保护,二级,街道B&#10;&#10;或直接粘贴 Markdown 表格"
-                    value={chapterData.chapter_1}
-                    onChange={(value) => setChapterData(prev => ({ ...prev, chapter_1: value }))}
-                    rows={25}
-                  />
-
-                  {exampleFiles.length > 0 && (
-                    <div style={{
-                      padding: '12px',
-                      background: '#f0f9ff',
-                      border: '1px solid #91caff',
-                      borderRadius: '6px',
-                      fontSize: '13px'
-                    }}>
-                      <div style={{ fontWeight: 500, marginBottom: 4 }}>
-                        📚 已加载 {exampleFiles.length} 个示例文档
-                      </div>
-                      <div style={{ color: '#666' }}>
-                        {exampleFiles.map(f => f.name).join(', ')}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <div style={{ marginBottom: 8, fontWeight: 500 }}>选择Prompt模板</div>
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder="使用默认模板"
-                      allowClear
-                      value={selectedTemplates.chapter_1 || undefined}
-                      onChange={(value) => setSelectedTemplates(prev => ({ ...prev, chapter_1: value || '' }))}
-                    >
-                      {templates.chapter_1?.map(template => (
-                        <Select.Option key={template.id} value={template.id}>
-                          {template.name} {template.is_default && '(默认)'}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </div>
-
-                  <Button
-                    type="primary"
-                    size="large"
-                    block
-                    onClick={() => handleGenerate('chapter_1')}
-                    loading={loading.chapter_1}
-                    disabled={!chapterData.chapter_1.trim()}
-                  >
-                    生成报告
-                  </Button>
-                </Space>
-              </div>
-
-              {/* Right: Report Display */}
-              <div style={{ flex: 1 }}>
-                <ReportEditor
-                  content={chapterContents.chapter_1}
-                  onChange={(content) => handleContentChange('chapter_1', content)}
-                  onExport={() => handleExport('chapter_1')}
-                  loading={loading.chapter_1}
-                />
-              </div>
-            </div>
-          )
-        },
-        {
-          key: 'chapter_2',
-          label: '二、高频社会治理问题隐患分析研判',
-          children: (
-            <div style={{ display: 'flex', gap: '16px' }}>
-              {/* Left: Data Input */}
-              <div style={{ flex: '0 0 450px' }}>
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  <DataInput
-                    title="输入数据"
-                    placeholder="请粘贴 CSV 或 Markdown 格式的数据&#10;&#10;CSV 示例：&#10;事件ID,事件类型,等级,街镇&#10;E001,城市管理,三级,街道A&#10;E002,环境保护,二级,街道B&#10;&#10;或直接粘贴 Markdown 表格"
-                    value={chapterData.chapter_2}
-                    onChange={(value) => setChapterData(prev => ({ ...prev, chapter_2: value }))}
-                    rows={25}
-                  />
-
-                  {exampleFiles.length > 0 && (
-                    <div style={{
-                      padding: '12px',
-                      background: '#f0f9ff',
-                      border: '1px solid #91caff',
-                      borderRadius: '6px',
-                      fontSize: '13px'
-                    }}>
-                      <div style={{ fontWeight: 500, marginBottom: 4 }}>
-                        📚 已加载 {exampleFiles.length} 个示例文档
-                      </div>
-                      <div style={{ color: '#666' }}>
-                        {exampleFiles.map(f => f.name).join(', ')}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <div style={{ marginBottom: 8, fontWeight: 500 }}>选择Prompt模板</div>
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder="使用默认模板"
-                      allowClear
-                      value={selectedTemplates.chapter_2 || undefined}
-                      onChange={(value) => setSelectedTemplates(prev => ({ ...prev, chapter_2: value || '' }))}
-                    >
-                      {templates.chapter_2?.map(template => (
-                        <Select.Option key={template.id} value={template.id}>
-                          {template.name} {template.is_default && '(默认)'}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </div>
-
-                  <Button
-                    type="primary"
-                    size="large"
-                    block
-                    onClick={() => handleGenerate('chapter_2')}
-                    loading={loading.chapter_2}
-                    disabled={!chapterData.chapter_2.trim()}
-                  >
-                    生成报告
-                  </Button>
-                </Space>
-              </div>
-
-              {/* Right: Report Display */}
-              <div style={{ flex: 1 }}>
-                <ReportEditor
-                  content={chapterContents.chapter_2}
-                  onChange={(content) => handleContentChange('chapter_2', content)}
-                  onExport={() => handleExport('chapter_2')}
-                  loading={loading.chapter_2}
-                />
-              </div>
-            </div>
-          )
-        }
-      ]}
+      items={CHAPTERS.map(({ key, label }) => ({
+        key,
+        label,
+        children: renderChapterPanel(key)
+      }))}
     />
   );
 

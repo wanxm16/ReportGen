@@ -6,6 +6,8 @@ from enum import Enum
 class ChapterType(str, Enum):
     CHAPTER_1 = "chapter_1"  # 全区社会治理基本情况
     CHAPTER_2 = "chapter_2"  # 高频社会治理问题隐患分析研判
+    CHAPTER_3 = "chapter_3"  # 社情民意热点问题分析预警
+    CHAPTER_4 = "chapter_4"  # 事件处置解决情况分析
 
 
 class GenerateReportRequest(BaseModel):

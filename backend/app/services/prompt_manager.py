@@ -1,5 +1,6 @@
 """Prompt template management service"""
 
+import copy
 import json
 import uuid
 from pathlib import Path
@@ -10,11 +11,14 @@ PROMPTS_DIR = Path("prompts")
 TEMPLATES_FILE = PROMPTS_DIR / "templates.json"
 
 # Default templates for each chapter
+from ..constants import CHAPTER_DISPLAY_NAMES, CHAPTER_TITLES
+
+
 DEFAULT_TEMPLATES = {
     "chapter_1": [
         {
             "id": "default_chapter_1",
-            "name": "默认模板 - 全区社会治理基本情况",
+            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_1']}",
             "chapter": "chapter_1",
             "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
             "user_prompt_template": """请根据以下数据生成【全区社会治理基本情况】章节的报告内容。
@@ -38,7 +42,7 @@ DEFAULT_TEMPLATES = {
     "chapter_2": [
         {
             "id": "default_chapter_2",
-            "name": "默认模板 - 高频问题分析",
+            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_2']}",
             "chapter": "chapter_2",
             "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
             "user_prompt_template": """请根据以下数据生成【高频社会治理问题隐患分析研判】章节的报告内容。
@@ -55,6 +59,60 @@ DEFAULT_TEMPLATES = {
 使用Markdown格式，包含标题、段落和必要的表格。
 
 {examples_text}""",
+            "is_default": True,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ],
+    "chapter_3": [
+        {
+            "id": "default_chapter_3",
+            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_3']}",
+            "chapter": "chapter_3",
+            "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
+            "user_prompt_template": f"""请根据以下数据生成【{CHAPTER_DISPLAY_NAMES['chapter_3']}】章节的报告内容。
+
+# 数据
+{{data_summary}}
+
+# 要求
+1. 识别当月社情民意热点问题（不少于 3 个），阐述问题类型、数量、环比趋势及主要诉求点
+2. 对每个热点开展风险研判，说明成因、影响范围及潜在风险等级
+3. 为每个热点提出可执行的预警或处置建议，建议需明确责任单位、行动措施和时间要求
+
+# 输出格式
+- 使用Markdown格式，整体结构需包含“# {CHAPTER_TITLES['chapter_3']}”
+- 对每个热点使用二级或三级标题，先描述问题概况，再使用列表或表格呈现关键指标
+- 建议部分使用无序列表，确保条目清晰可执行
+
+{{examples_text}}""",
+            "is_default": True,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ],
+    "chapter_4": [
+        {
+            "id": "default_chapter_4",
+            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_4']}",
+            "chapter": "chapter_4",
+            "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
+            "user_prompt_template": f"""请根据以下数据生成【{CHAPTER_DISPLAY_NAMES['chapter_4']}】章节的报告内容。
+
+# 数据
+{{data_summary}}
+
+# 要求
+1. 概括本月事件处置总体情况，包括办结量、办结率、环比变化以及积案治理进展
+2. 分析重点单位或街镇的处置表现，指出亮点做法与存在短板
+3. 统计积案、新增积案及风险事件情况，给出下一步工作建议（责任单位 + 行动举措 + 时限）
+
+# 输出格式
+- 使用Markdown格式，整体结构需包含“# {CHAPTER_TITLES['chapter_4']}”
+- 建议按照“总体情况”“重点单位（街镇）表现”“积案治理情况”“工作建议”等小节组织内容
+- 如需展示指标对比，可使用Markdown表格或列表，确保格式规范
+
+{{examples_text}}""",
             "is_default": True,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()
@@ -78,24 +136,31 @@ class PromptManager:
         Returns:
             Dictionary mapping chapter to list of templates
         """
+        import copy
+
         PromptManager._ensure_dir()
 
         if not TEMPLATES_FILE.exists():
             # Initialize with default templates
-            PromptManager._save_all_templates(DEFAULT_TEMPLATES)
-            return DEFAULT_TEMPLATES
+            initial_templates = copy.deepcopy(DEFAULT_TEMPLATES)
+            PromptManager._save_all_templates(initial_templates)
+            return initial_templates
 
         try:
             with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 templates = json.load(f)
                 # Ensure all chapters have at least default template
+                updated = False
                 for chapter, defaults in DEFAULT_TEMPLATES.items():
                     if chapter not in templates or not templates[chapter]:
-                        templates[chapter] = defaults
+                        templates[chapter] = copy.deepcopy(defaults)
+                        updated = True
+                if updated:
+                    PromptManager._save_all_templates(templates)
                 return templates
         except Exception as e:
             print(f"Warning: Failed to load templates: {e}")
-            return DEFAULT_TEMPLATES
+            return copy.deepcopy(DEFAULT_TEMPLATES)
 
     @staticmethod
     def _save_all_templates(templates: Dict[str, List[Dict]]) -> None:

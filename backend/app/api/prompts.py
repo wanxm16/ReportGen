@@ -11,6 +11,7 @@ from ..models import (
 )
 from ..services.prompt_manager import PromptManager
 from ..services.prompt_generator import PromptGenerator
+from ..constants import ALL_CHAPTERS, CHAPTER_DISPLAY_NAMES
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
@@ -19,6 +20,11 @@ class GeneratePromptRequest(BaseModel):
     """Request model for generating prompt from examples"""
     chapter: ChapterType
     example_file_ids: Optional[List[str]] = None  # If None, use all available examples
+
+
+class GenerateAllChaptersRequest(BaseModel):
+    """Request model for generating all chapter prompts in batch"""
+    example_file_ids: Optional[List[str]] = None
 
 
 @router.get("/templates", response_model=List[PromptTemplate])
@@ -200,7 +206,7 @@ async def generate_prompt_from_examples(request: GeneratePromptRequest):
 
 
 @router.post("/generate-all-chapters")
-async def generate_all_chapters_prompts(example_file_ids: Optional[List[str]] = None):
+async def generate_all_chapters_prompts(request: Optional[GenerateAllChaptersRequest] = None):
     """Generate prompt templates for all chapters sequentially
 
     This endpoint analyzes example documents and generates prompts for all chapters
@@ -216,11 +222,13 @@ async def generate_all_chapters_prompts(example_file_ids: Optional[List[str]] = 
         generator = PromptGenerator()
 
         # Define all chapters in order
-        chapters = ["chapter_1", "chapter_2"]  # Can extend to chapter_3, chapter_4, etc.
+        chapters = ALL_CHAPTERS
 
         results = []
 
         print(f"[API] Starting batch generation for {len(chapters)} chapters")
+
+        example_file_ids = request.example_file_ids if request and request.example_file_ids else None
 
         for chapter in chapters:
             print(f"[API] Generating prompt for {chapter}...")
@@ -239,7 +247,7 @@ async def generate_all_chapters_prompts(example_file_ids: Optional[List[str]] = 
                 from ..services.prompt_manager import PromptManager
                 template = PromptManager.create_template(
                     chapter=chapter,
-                    name=f"AI 批量生成 - {chapter}",
+                    name=f"AI 批量生成 - {CHAPTER_DISPLAY_NAMES.get(chapter, chapter)}",
                     system_prompt=result["system_prompt"],
                     user_prompt_template=result["user_prompt_template"],
                     is_default=False
@@ -247,6 +255,7 @@ async def generate_all_chapters_prompts(example_file_ids: Optional[List[str]] = 
 
                 results.append({
                     "chapter": chapter,
+                    "chapter_name": CHAPTER_DISPLAY_NAMES.get(chapter, chapter),
                     "success": True,
                     "template_id": template["id"],
                     "analyzed_examples": result["analyzed_examples"]
@@ -258,6 +267,7 @@ async def generate_all_chapters_prompts(example_file_ids: Optional[List[str]] = 
                 print(f"[API] Error generating {chapter}: {type(e).__name__}: {str(e)}")
                 results.append({
                     "chapter": chapter,
+                    "chapter_name": CHAPTER_DISPLAY_NAMES.get(chapter, chapter),
                     "success": False,
                     "error": str(e)
                 })

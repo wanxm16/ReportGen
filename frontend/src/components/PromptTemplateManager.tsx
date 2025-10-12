@@ -24,7 +24,12 @@ import {
   BulbOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
-import { generatePromptFromExamples, getAllExamples, generateAllChaptersPrompts } from '../services/api';
+import {
+  generatePromptFromExamples,
+  getAllExamples,
+  generateAllChaptersPrompts,
+  PromptChapterType
+} from '../services/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -32,7 +37,7 @@ const { Option } = Select;
 interface Template {
   id: string;
   name: string;
-  chapter: string;
+  chapter: PromptChapterType;
   system_prompt: string;
   user_prompt_template: string;
   is_default: boolean;
@@ -42,10 +47,17 @@ interface Template {
 
 const API_BASE = 'http://localhost:8000/api/prompts';
 
-const CHAPTER_NAMES = {
+const CHAPTER_NAMES: Record<PromptChapterType, string> = {
   chapter_1: '一、全区社会治理基本情况',
-  chapter_2: '二、高频社会治理问题隐患分析研判'
+  chapter_2: '二、高频社会治理问题隐患分析研判',
+  chapter_3: '三、社情民意热点问题分析预警',
+  chapter_4: '四、事件处置解决情况分析'
 };
+
+const CHAPTER_KEYS = Object.keys(CHAPTER_NAMES) as PromptChapterType[];
+
+const getChapterLabel = (chapter: string, fallback?: string) =>
+  CHAPTER_NAMES[chapter as PromptChapterType] || fallback || chapter;
 
 export const PromptTemplateManager: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -87,6 +99,7 @@ export const PromptTemplateManager: React.FC = () => {
   const handleCreate = () => {
     setEditingTemplate(null);
     form.resetFields();
+    form.setFieldsValue({ chapter: CHAPTER_KEYS[0] });
     setModalVisible(true);
   };
 
@@ -163,7 +176,7 @@ export const PromptTemplateManager: React.FC = () => {
     }
   };
 
-  const handleGenerateFromExamples = async (chapter: string) => {
+  const handleGenerateFromExamples = async (chapter: PromptChapterType) => {
     if (!hasExamples) {
       message.warning('请先上传示例文档');
       return;
@@ -192,13 +205,13 @@ export const PromptTemplateManager: React.FC = () => {
         try {
           message.loading({ content: '正在分析示例文档并生成 Prompt...', key: 'generating', duration: 0 });
 
-          const result = await generatePromptFromExamples(chapter as any);
+          const result = await generatePromptFromExamples(chapter);
 
           message.success({ content: `成功分析 ${result.analyzed_examples} 个示例`, key: 'generating' });
 
           // Fill form with generated prompt
           form.setFieldsValue({
-            name: `AI 生成 - ${CHAPTER_NAMES[chapter as keyof typeof CHAPTER_NAMES]}`,
+            name: `AI 生成 - ${CHAPTER_NAMES[chapter]}`,
             chapter: chapter,
             system_prompt: result.system_prompt,
             user_prompt_template: result.user_prompt_template,
@@ -229,8 +242,9 @@ export const PromptTemplateManager: React.FC = () => {
         <div>
           <p>将自动分析示例文档，依次生成所有章节的 Prompt 模板：</p>
           <ul>
-            <li>一、全区社会治理基本情况</li>
-            <li>二、高频社会治理问题隐患分析研判</li>
+            {CHAPTER_KEYS.map((key) => (
+              <li key={key}>{CHAPTER_NAMES[key]}</li>
+            ))}
           </ul>
           <p>每个章节将：</p>
           <ul>
@@ -261,7 +275,9 @@ export const PromptTemplateManager: React.FC = () => {
             });
 
             // Show detailed results
-            const successChapters = result.results.filter(r => r.success).map(r => r.chapter);
+            const successChapters = result.results
+              .filter(r => r.success)
+              .map(r => getChapterLabel(r.chapter, r.chapter_name));
             const failedChapters = result.results.filter(r => !r.success);
 
             if (successChapters.length > 0) {
@@ -269,7 +285,7 @@ export const PromptTemplateManager: React.FC = () => {
             }
             if (failedChapters.length > 0) {
               failedChapters.forEach(fc => {
-                message.error(`${fc.chapter} 生成失败：${fc.error}`);
+                message.error(`${getChapterLabel(fc.chapter, fc.chapter_name)} 生成失败：${fc.error}`);
               });
             }
 
@@ -289,12 +305,13 @@ export const PromptTemplateManager: React.FC = () => {
   };
 
   const groupedTemplates = templates.reduce((acc, template) => {
-    if (!acc[template.chapter]) {
-      acc[template.chapter] = [];
+    const key = template.chapter as PromptChapterType;
+    if (!acc[key]) {
+      acc[key] = [];
     }
-    acc[template.chapter].push(template);
+    acc[key].push(template);
     return acc;
-  }, {} as Record<string, Template[]>);
+  }, {} as Record<PromptChapterType, Template[]>);
 
   if (loading) {
     return (
@@ -338,76 +355,85 @@ export const PromptTemplateManager: React.FC = () => {
         style={{ marginBottom: 16 }}
       />
 
-      {Object.entries(groupedTemplates).map(([chapter, chapterTemplates]) => (
-        <Card
-          key={chapter}
-          title={CHAPTER_NAMES[chapter as keyof typeof CHAPTER_NAMES] || chapter}
-          extra={
-            <Button
-              type="dashed"
-              icon={<BulbOutlined />}
-              onClick={() => handleGenerateFromExamples(chapter)}
-              loading={generating}
-              disabled={!hasExamples}
-            >
-              AI 生成 Prompt
-            </Button>
-          }
-          style={{ marginBottom: 16 }}
-        >
-          <List
-            dataSource={chapterTemplates}
-            renderItem={(template) => (
-              <List.Item
-                actions={[
-                  template.is_default ? (
-                    <Tag color="gold" icon={<StarFilled />}>默认</Tag>
-                  ) : (
-                    <Button
-                      size="small"
-                      icon={<StarOutlined />}
-                      onClick={() => handleSetDefault(template)}
-                    >
-                      设为默认
-                    </Button>
-                  ),
-                  <Button
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => handleEdit(template)}
-                  >
-                    编辑
-                  </Button>,
-                  <Popconfirm
-                    title="确定要删除这个模板吗？"
-                    onConfirm={() => handleDelete(template.id)}
-                    okText="确定"
-                    cancelText="取消"
-                  >
-                    <Button size="small" danger icon={<DeleteOutlined />}>
-                      删除
-                    </Button>
-                  </Popconfirm>
-                ]}
+      {CHAPTER_KEYS.map((chapter) => {
+        const chapterTemplates = groupedTemplates[chapter] || [];
+        return (
+          <Card
+            key={chapter}
+            title={CHAPTER_NAMES[chapter]}
+            extra={
+              <Button
+                type="dashed"
+                icon={<BulbOutlined />}
+                onClick={() => handleGenerateFromExamples(chapter)}
+                loading={generating}
+                disabled={!hasExamples}
               >
-                <List.Item.Meta
-                  title={template.name}
-                  description={
-                    <div>
-                      <div style={{ fontSize: 12, color: '#999' }}>
-                        System Prompt: {template.system_prompt.substring(0, 50)}...
-                      </div>
-                      <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                        更新时间: {new Date(template.updated_at).toLocaleString()}
-                      </div>
-                    </div>
-                  }
-                />
-              </List.Item>
+                AI 生成 Prompt
+              </Button>
+            }
+            style={{ marginBottom: 16 }}
+          >
+            {chapterTemplates.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#999', padding: '24px 0' }}>
+                暂无模板，请手动创建或使用“一键生成所有章节”
+              </div>
+            ) : (
+              <List
+                dataSource={chapterTemplates}
+                renderItem={(template) => (
+                  <List.Item
+                    actions={[
+                      template.is_default ? (
+                        <Tag color="gold" icon={<StarFilled />}>默认</Tag>
+                      ) : (
+                        <Button
+                          size="small"
+                          icon={<StarOutlined />}
+                          onClick={() => handleSetDefault(template)}
+                        >
+                          设为默认
+                        </Button>
+                      ),
+                      <Button
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => handleEdit(template)}
+                      >
+                        编辑
+                      </Button>,
+                      <Popconfirm
+                        title="确定要删除这个模板吗？"
+                        onConfirm={() => handleDelete(template.id)}
+                        okText="确定"
+                        cancelText="取消"
+                      >
+                        <Button size="small" danger icon={<DeleteOutlined />}>
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={template.name}
+                      description={
+                        <div>
+                          <div style={{ fontSize: 12, color: '#999' }}>
+                            System Prompt: {template.system_prompt.substring(0, 50)}...
+                          </div>
+                          <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                            更新时间: {new Date(template.updated_at).toLocaleString()}
+                          </div>
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
             )}
-          />
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
 
       <Modal
         title={editingTemplate ? '编辑模板' : '新建模板'}
@@ -434,8 +460,11 @@ export const PromptTemplateManager: React.FC = () => {
               rules={[{ required: true, message: '请选择章节' }]}
             >
               <Select placeholder="选择章节">
-                <Option value="chapter_1">{CHAPTER_NAMES.chapter_1}</Option>
-                <Option value="chapter_2">{CHAPTER_NAMES.chapter_2}</Option>
+                {CHAPTER_KEYS.map((key) => (
+                  <Option key={key} value={key}>
+                    {CHAPTER_NAMES[key]}
+                  </Option>
+                ))}
               </Select>
             </Form.Item>
           )}

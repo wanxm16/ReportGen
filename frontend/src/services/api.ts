@@ -16,7 +16,8 @@ export interface GenerateReportResponse {
   error?: string;
 }
 
-export type ChapterType = 'chapter_1' | 'chapter_2';
+export type ChapterType = 'chapter_1' | 'chapter_2' | 'chapter_3' | 'chapter_4';
+export type PromptChapterType = ChapterType;
 
 // Upload example file (Markdown or Word)
 export const uploadExampleFile = async (file: File): Promise<UploadResponse> => {
@@ -93,7 +94,7 @@ export interface GeneratePromptResponse {
 }
 
 export const generatePromptFromExamples = async (
-  chapter: ChapterType,
+  chapter: PromptChapterType,
   exampleFileIds?: string[]
 ): Promise<GeneratePromptResponse> => {
   const response = await axios.post<GeneratePromptResponse>(
@@ -114,6 +115,7 @@ export interface BatchGenerateResponse {
   failed: number;
   results: Array<{
     chapter: string;
+    chapter_name?: string;
     success: boolean;
     template_id?: string;
     analyzed_examples?: number;
