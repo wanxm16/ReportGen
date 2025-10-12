@@ -1,0 +1,317 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  List,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+  Space,
+  Popconfirm,
+  Tag,
+  Spin,
+  Alert
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  StarOutlined,
+  StarFilled,
+  QuestionCircleOutlined
+} from '@ant-design/icons';
+
+const { TextArea } = Input;
+const { Option } = Select;
+
+interface Template {
+  id: string;
+  name: string;
+  chapter: string;
+  system_prompt: string;
+  user_prompt_template: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+const API_BASE = 'http://localhost:8000/api/prompts';
+
+const CHAPTER_NAMES = {
+  chapter_1: '一、全区社会治理基本情况',
+  chapter_2: '二、高频社会治理问题隐患分析研判'
+};
+
+export const PromptTemplateManager: React.FC = () => {
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const loadTemplates = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/templates`);
+      const data = await response.json();
+      setTemplates(data);
+    } catch (error) {
+      message.error('加载模板失败');
+      console.error('Load templates error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = () => {
+    setEditingTemplate(null);
+    form.resetFields();
+    setModalVisible(true);
+  };
+
+  const handleEdit = (template: Template) => {
+    setEditingTemplate(template);
+    form.setFieldsValue(template);
+    setModalVisible(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields();
+
+      if (editingTemplate) {
+        // Update existing template
+        const response = await fetch(`${API_BASE}/templates/${editingTemplate.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
+
+        if (!response.ok) throw new Error('更新失败');
+        message.success('模板更新成功');
+      } else {
+        // Create new template
+        const response = await fetch(`${API_BASE}/templates`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
+
+        if (!response.ok) throw new Error('创建失败');
+        message.success('模板创建成功');
+      }
+
+      setModalVisible(false);
+      loadTemplates();
+    } catch (error: any) {
+      message.error(error.message || '保存失败');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/templates/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || '删除失败');
+      }
+
+      message.success('模板删除成功');
+      loadTemplates();
+    } catch (error: any) {
+      message.error(error.message || '删除失败');
+    }
+  };
+
+  const handleSetDefault = async (template: Template) => {
+    try {
+      const response = await fetch(`${API_BASE}/templates/${template.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_default: true })
+      });
+
+      if (!response.ok) throw new Error('设置失败');
+      message.success('已设置为默认模板');
+      loadTemplates();
+    } catch (error: any) {
+      message.error(error.message || '设置失败');
+    }
+  };
+
+  const groupedTemplates = templates.reduce((acc, template) => {
+    if (!acc[template.chapter]) {
+      acc[template.chapter] = [];
+    }
+    acc[template.chapter].push(template);
+    return acc;
+  }, {} as Record<string, Template[]>);
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '100px 0' }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16 }}>加载中...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          新建模板
+        </Button>
+      </div>
+
+      <Alert
+        message="模板说明"
+        description={
+          <div>
+            <p>• 每个章节可以有多个Prompt模板</p>
+            <p>• 生成报告时可以选择使用哪个模板</p>
+            <p>• 标记为默认的模板会在未选择时自动使用</p>
+            <p>• 占位符：<code>{'{data_summary}'}</code> 数据摘要，<code>{'{examples_text}'}</code> 示例文档</p>
+          </div>
+        }
+        type="info"
+        icon={<QuestionCircleOutlined />}
+        style={{ marginBottom: 16 }}
+      />
+
+      {Object.entries(groupedTemplates).map(([chapter, chapterTemplates]) => (
+        <Card
+          key={chapter}
+          title={CHAPTER_NAMES[chapter as keyof typeof CHAPTER_NAMES] || chapter}
+          style={{ marginBottom: 16 }}
+        >
+          <List
+            dataSource={chapterTemplates}
+            renderItem={(template) => (
+              <List.Item
+                actions={[
+                  template.is_default ? (
+                    <Tag color="gold" icon={<StarFilled />}>默认</Tag>
+                  ) : (
+                    <Button
+                      size="small"
+                      icon={<StarOutlined />}
+                      onClick={() => handleSetDefault(template)}
+                    >
+                      设为默认
+                    </Button>
+                  ),
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => handleEdit(template)}
+                  >
+                    编辑
+                  </Button>,
+                  <Popconfirm
+                    title="确定要删除这个模板吗？"
+                    onConfirm={() => handleDelete(template.id)}
+                    okText="确定"
+                    cancelText="取消"
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                ]}
+              >
+                <List.Item.Meta
+                  title={template.name}
+                  description={
+                    <div>
+                      <div style={{ fontSize: 12, color: '#999' }}>
+                        System Prompt: {template.system_prompt.substring(0, 50)}...
+                      </div>
+                      <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                        更新时间: {new Date(template.updated_at).toLocaleString()}
+                      </div>
+                    </div>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      ))}
+
+      <Modal
+        title={editingTemplate ? '编辑模板' : '新建模板'}
+        open={modalVisible}
+        onOk={handleSave}
+        onCancel={() => setModalVisible(false)}
+        width={800}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="name"
+            label="模板名称"
+            rules={[{ required: true, message: '请输入模板名称' }]}
+          >
+            <Input placeholder="例如：详细版报告、简化版报告" />
+          </Form.Item>
+
+          {!editingTemplate && (
+            <Form.Item
+              name="chapter"
+              label="所属章节"
+              rules={[{ required: true, message: '请选择章节' }]}
+            >
+              <Select placeholder="选择章节">
+                <Option value="chapter_1">{CHAPTER_NAMES.chapter_1}</Option>
+                <Option value="chapter_2">{CHAPTER_NAMES.chapter_2}</Option>
+              </Select>
+            </Form.Item>
+          )}
+
+          <Form.Item
+            name="system_prompt"
+            label="System Prompt"
+            rules={[{ required: true, message: '请输入System Prompt' }]}
+          >
+            <TextArea
+              rows={4}
+              placeholder="设置AI的角色和行为，例如：你是一位专业的数据分析师..."
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="user_prompt_template"
+            label="User Prompt Template"
+            rules={[{ required: true, message: '请输入User Prompt Template' }]}
+          >
+            <TextArea
+              rows={15}
+              placeholder="编写提示词模板，使用 {data_summary} 和 {examples_text} 作为占位符"
+              style={{ fontFamily: 'monospace' }}
+            />
+          </Form.Item>
+
+          <Form.Item name="is_default" valuePropName="checked" initialValue={false}>
+            <div>
+              <input type="checkbox" id="is_default" />
+              <label htmlFor="is_default" style={{ marginLeft: 8 }}>
+                设为该章节的默认模板
+              </label>
+            </div>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+};
