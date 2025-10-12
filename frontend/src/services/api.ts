@@ -82,3 +82,26 @@ export const getAllExamples = async (): Promise<Array<{id: string, name: string}
 export const deleteExampleFile = async (fileId: string): Promise<void> => {
   await axios.delete(`${API_BASE_URL}/upload/example/${fileId}`);
 };
+
+// Generate prompt template from example documents
+export interface GeneratePromptResponse {
+  success: boolean;
+  system_prompt: string;
+  user_prompt_template: string;
+  analyzed_examples: number;
+  chapter_type: string;
+}
+
+export const generatePromptFromExamples = async (
+  chapter: ChapterType,
+  exampleFileIds?: string[]
+): Promise<GeneratePromptResponse> => {
+  const response = await axios.post<GeneratePromptResponse>(
+    `${API_BASE_URL}/prompts/generate-from-examples`,
+    {
+      chapter,
+      example_file_ids: exampleFileIds || null
+    }
+  );
+  return response.data;
+};

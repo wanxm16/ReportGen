@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from typing import List
+from pydantic import BaseModel
 from ..models import (
     PromptTemplate,
     CreateTemplateRequest,
@@ -9,8 +10,15 @@ from ..models import (
     ChapterType
 )
 from ..services.prompt_manager import PromptManager
+from ..services.prompt_generator import PromptGenerator
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
+
+
+class GeneratePromptRequest(BaseModel):
+    """Request model for generating prompt from examples"""
+    chapter: ChapterType
+    example_file_ids: List[str] = None  # If None, use all available examples
 
 
 @router.get("/templates", response_model=List[PromptTemplate])
@@ -141,3 +149,51 @@ async def delete_template(template_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete template: {str(e)}")
+
+
+@router.post("/generate-from-examples")
+async def generate_prompt_from_examples(request: GeneratePromptRequest):
+    """Generate prompt template by analyzing example documents
+
+    This endpoint uses AI to analyze example documents and automatically
+    generate a prompt template that matches the style and structure of
+    those examples.
+
+    Args:
+        request: GeneratePromptRequest with chapter and optional example IDs
+
+    Returns:
+        Generated prompt template with system_prompt and user_prompt_template
+    """
+    try:
+        generator = PromptGenerator()
+
+        # If no specific examples provided, use all available examples
+        if not request.example_file_ids:
+            print("[API] No example IDs provided, using all available examples")
+            result = generator.generate_from_all_examples(
+                chapter_type=request.chapter.value
+            )
+        else:
+            print(f"[API] Generating prompt from {len(request.example_file_ids)} example(s)")
+            result = generator.generate_from_examples(
+                example_file_ids=request.example_file_ids,
+                chapter_type=request.chapter.value
+            )
+
+        return {
+            "success": True,
+            "system_prompt": result["system_prompt"],
+            "user_prompt_template": result["user_prompt_template"],
+            "analyzed_examples": result["analyzed_examples"],
+            "chapter_type": result["chapter_type"]
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[API] Error generating prompt: {type(e).__name__}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate prompt: {str(e)}"
+        )

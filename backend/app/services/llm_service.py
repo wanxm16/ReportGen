@@ -137,3 +137,144 @@ class LLMService:
 
         # Fix markdown table formatting
         return self._fix_markdown_tables(response)
+
+    def analyze_examples_and_generate_prompt(
+        self,
+        chapter_contents: list[str],
+        chapter_type: str
+    ) -> dict:
+        """Analyze example documents and generate prompt template
+
+        Args:
+            chapter_contents: List of chapter contents from example documents
+            chapter_type: Type of chapter (e.g., "chapter_1", "chapter_2")
+
+        Returns:
+            Dictionary with 'system_prompt' and 'user_prompt_template'
+        """
+        # Build analysis prompt
+        chapter_names = {
+            "chapter_1": "全区社会治理基本情况",
+            "chapter_2": "高频社会治理问题隐患分析研判"
+        }
+
+        chapter_name = chapter_names.get(chapter_type, chapter_type)
+
+        # Combine all examples
+        examples_text = "\n\n---\n\n".join([
+            f"### 示例 {i+1}\n\n{content}"
+            for i, content in enumerate(chapter_contents)
+        ])
+
+        system_prompt = """你是一位专业的提示词工程师，擅长分析文档风格并生成高质量的 AI 提示词模板。"""
+
+        user_prompt = f"""请分析以下"{chapter_name}"章节的多个示例文档，并生成一个完整的 prompt 模板。
+
+# 示例文档
+
+{examples_text}
+
+# 分析任务
+
+请仔细分析以上示例，提取以下特征：
+
+1. **写作风格和语气**：正式程度、专业性、语言特点
+2. **内容组织结构**：标题层级、段落组织、逻辑顺序
+3. **数据呈现方式**：表格格式、列表形式、数据可视化方法
+4. **必须包含的关键信息点**：哪些内容是必不可少的
+5. **篇幅和详细程度**：内容的详细程度、篇幅控制
+6. **格式规范**：Markdown 使用规范、表格格式要求
+
+# 生成要求
+
+基于以上分析，请生成两个部分：
+
+## 1. system_prompt
+设定 AI 的角色、能力和基本要求。应该包括：
+- AI 的专业身份定位
+- 主要职责和能力
+- 基本的写作要求
+
+## 2. user_prompt_template
+具体的任务指令模板。必须包括：
+- 明确的任务描述
+- 详细的格式要求（基于示例分析）
+- 关键信息点的列举
+- 数据呈现规范
+- **重要**：必须包含 `{{data_summary}}` 占位符（用于插入数据摘要）
+- **重要**：必须包含 `{{examples_text}}` 占位符（用于插入参考示例）
+- 质量要求和注意事项
+
+# 输出格式
+
+请严格按照以下 JSON 格式输出（不要有任何额外的文字说明）：
+
+```json
+{{
+  "system_prompt": "你的 system_prompt 内容...",
+  "user_prompt_template": "你的 user_prompt_template 内容，必须包含 {{{{data_summary}}}} 和 {{{{examples_text}}}} 占位符..."
+}}
+```
+
+注意：
+1. 输出必须是有效的 JSON 格式
+2. user_prompt_template 中必须包含 `{{{{data_summary}}}}` 和 `{{{{examples_text}}}}` 两个占位符
+3. 基于示例的实际风格生成，不要泛泛而谈
+4. 确保生成的 prompt 能够引导 AI 生成与示例风格一致的内容
+"""
+
+        print(f"[PromptGen] Analyzing {len(chapter_contents)} example(s) for {chapter_type}")
+        print(f"[PromptGen] Total example content length: {len(examples_text)}")
+
+        # Call LLM with higher temperature for creative prompt generation
+        response = self.generate_response(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.7,
+            max_tokens=4000
+        )
+
+        print(f"[PromptGen] Generated response length: {len(response)}")
+
+        # Parse JSON response
+        import json
+        import re
+
+        # Try to extract JSON from code block if present
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Try to find JSON object directly
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                raise ValueError("Failed to extract JSON from LLM response")
+
+        try:
+            result = json.loads(json_str)
+
+            # Validate required fields
+            if "system_prompt" not in result or "user_prompt_template" not in result:
+                raise ValueError("Generated prompt missing required fields")
+
+            # Validate placeholders in user_prompt_template
+            if "{data_summary}" not in result["user_prompt_template"]:
+                print("[PromptGen] Warning: {data_summary} placeholder not found, adding it")
+                result["user_prompt_template"] += "\n\n{data_summary}"
+
+            if "{examples_text}" not in result["user_prompt_template"]:
+                print("[PromptGen] Warning: {examples_text} placeholder not found, adding it")
+                result["user_prompt_template"] += "\n\n{examples_text}"
+
+            print(f"[PromptGen] Successfully generated prompt template")
+            print(f"[PromptGen] System prompt length: {len(result['system_prompt'])}")
+            print(f"[PromptGen] User prompt template length: {len(result['user_prompt_template'])}")
+
+            return result
+
+        except json.JSONDecodeError as e:
+            print(f"[PromptGen] JSON parsing error: {e}")
+            print(f"[PromptGen] Response content: {response[:500]}")
+            raise ValueError(f"Failed to parse JSON from LLM response: {e}")

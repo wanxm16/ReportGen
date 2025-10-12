@@ -20,8 +20,10 @@ import {
   DeleteOutlined,
   StarOutlined,
   StarFilled,
-  QuestionCircleOutlined
+  QuestionCircleOutlined,
+  BulbOutlined
 } from '@ant-design/icons';
+import { generatePromptFromExamples, getAllExamples } from '../services/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -50,9 +52,12 @@ export const PromptTemplateManager: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [form] = Form.useForm();
+  const [generating, setGenerating] = useState(false);
+  const [hasExamples, setHasExamples] = useState(false);
 
   useEffect(() => {
     loadTemplates();
+    checkExamples();
   }, []);
 
   const loadTemplates = async () => {
@@ -66,6 +71,15 @@ export const PromptTemplateManager: React.FC = () => {
       console.error('Load templates error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkExamples = async () => {
+    try {
+      const examples = await getAllExamples();
+      setHasExamples(examples.length > 0);
+    } catch (error) {
+      console.error('Check examples error:', error);
     }
   };
 
@@ -148,6 +162,60 @@ export const PromptTemplateManager: React.FC = () => {
     }
   };
 
+  const handleGenerateFromExamples = async (chapter: string) => {
+    if (!hasExamples) {
+      message.warning('请先上传示例文档');
+      return;
+    }
+
+    Modal.confirm({
+      title: '从示例文档生成 Prompt',
+      content: (
+        <div>
+          <p>将分析所有已上传的示例文档，自动生成适合的 Prompt 模板。</p>
+          <p>生成的模板将：</p>
+          <ul>
+            <li>学习示例文档的写作风格和结构</li>
+            <li>提取关键信息点和格式要求</li>
+            <li>自动包含必要的占位符</li>
+          </ul>
+          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+            注意：生成过程需要调用 AI，可能需要 10-30 秒
+          </p>
+        </div>
+      ),
+      okText: '开始生成',
+      cancelText: '取消',
+      onOk: async () => {
+        setGenerating(true);
+        try {
+          message.loading({ content: '正在分析示例文档并生成 Prompt...', key: 'generating', duration: 0 });
+
+          const result = await generatePromptFromExamples(chapter as any);
+
+          message.success({ content: `成功分析 ${result.analyzed_examples} 个示例`, key: 'generating' });
+
+          // Fill form with generated prompt
+          form.setFieldsValue({
+            name: `AI 生成 - ${CHAPTER_NAMES[chapter as keyof typeof CHAPTER_NAMES]}`,
+            chapter: chapter,
+            system_prompt: result.system_prompt,
+            user_prompt_template: result.user_prompt_template,
+            is_default: false
+          });
+
+          setEditingTemplate(null);
+          setModalVisible(true);
+        } catch (error: any) {
+          message.error({ content: error.message || '生成失败', key: 'generating' });
+          console.error('Generate prompt error:', error);
+        } finally {
+          setGenerating(false);
+        }
+      }
+    });
+  };
+
   const groupedTemplates = templates.reduce((acc, template) => {
     if (!acc[template.chapter]) {
       acc[template.chapter] = [];
@@ -192,6 +260,17 @@ export const PromptTemplateManager: React.FC = () => {
         <Card
           key={chapter}
           title={CHAPTER_NAMES[chapter as keyof typeof CHAPTER_NAMES] || chapter}
+          extra={
+            <Button
+              type="dashed"
+              icon={<BulbOutlined />}
+              onClick={() => handleGenerateFromExamples(chapter)}
+              loading={generating}
+              disabled={!hasExamples}
+            >
+              AI 生成 Prompt
+            </Button>
+          }
           style={{ marginBottom: 16 }}
         >
           <List
