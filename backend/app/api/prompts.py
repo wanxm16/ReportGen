@@ -1,7 +1,7 @@
 """Prompt management API endpoints"""
 
 from fastapi import APIRouter, HTTPException
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from ..models import (
     PromptTemplate,
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 class GeneratePromptRequest(BaseModel):
     """Request model for generating prompt from examples"""
     chapter: ChapterType
-    example_file_ids: List[str] = None  # If None, use all available examples
+    example_file_ids: Optional[List[str]] = None  # If None, use all available examples
 
 
 @router.get("/templates", response_model=List[PromptTemplate])
