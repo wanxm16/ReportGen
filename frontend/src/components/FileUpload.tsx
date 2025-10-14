@@ -1,6 +1,6 @@
 import React from 'react';
-import { Upload, Button, message } from 'antd';
-import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Upload, Button } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
 
 interface FileUploadProps {

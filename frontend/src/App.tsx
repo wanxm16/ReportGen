@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Layout, Button, message, Tabs, Space, Select } from 'antd';
-import { FileTextOutlined, FolderOpenOutlined, SettingOutlined } from '@ant-design/icons';
-import { DataInput } from './components/DataInput';
-import { ReportEditor } from './components/ReportEditor';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Layout, message, Tabs, Space, Button, Affix, Segmented } from 'antd';
+import { FileTextOutlined, FolderOpenOutlined, SettingOutlined, EyeOutlined } from '@ant-design/icons';
+import { ChapterSection } from './components/ChapterSection';
+import { FullReportPreview } from './components/FullReportPreview';
 import { ExampleManager } from './components/ExampleManager';
 import { PromptTemplateManager } from './components/PromptTemplateManager';
 import {
@@ -57,11 +57,21 @@ const createChapterRecord = <T,>(factory: T | (() => T)): ChapterRecord<T> =>
     return acc;
   }, {} as ChapterRecord<T>);
 
+const buildFullReportContent = (contents: ChapterContent) =>
+  CHAPTERS.map(({ key, label }) => {
+    const chapterContent = contents[key]?.trim();
+    if (!chapterContent) {
+      return '';
+    }
+    return `## ${label}\n\n${chapterContent}`;
+  })
+    .filter(Boolean)
+    .join('\n\n');
+
 function App() {
   // 全局示例文档
   const [exampleFiles, setExampleFiles] = useState<ExampleFile[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [loadingExamples, setLoadingExamples] = useState(true);
 
   // State definitions (must come before useEffect)
   const [chapterData, setChapterData] = useState<ChapterData>(() => createChapterRecord(''));
@@ -69,9 +79,9 @@ function App() {
   const [chapterContents, setChapterContents] = useState<ChapterContent>(() => createChapterRecord(''));
 
   const [loading, setLoading] = useState<ChapterRecord<boolean>>(() => createChapterRecord(false));
-
   const [activeTab, setActiveTab] = useState<string>('report');
   const [activeChapter, setActiveChapter] = useState<ChapterType>('chapter_1');
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
   // Prompt templates
   const [templates, setTemplates] = useState<ChapterRecord<PromptTemplate[]>>(() => createChapterRecord(() => []));
@@ -104,8 +114,6 @@ function App() {
       } catch (error: any) {
         console.error('Failed to load examples:', error);
         message.error('加载示例文档失败');
-      } finally {
-        setLoadingExamples(false);
       }
     };
 
@@ -120,6 +128,17 @@ function App() {
       loadTemplates();
     }
   }, [activeTab]);
+
+  const chapterRefs = useMemo(
+    () => createChapterRecord(() => React.createRef<HTMLDivElement>()),
+    []
+  );
+
+  const fullReportContent = useMemo(() => buildFullReportContent(chapterContents), [chapterContents]);
+  const hasPartialContent = useMemo(
+    () => Object.values(chapterContents).some(value => !!value?.trim()),
+    [chapterContents]
+  );
 
   // Handle example file upload
   const handleUploadExample = async (file: File) => {
@@ -221,6 +240,11 @@ function App() {
 
   // Export to Word
   const handleExport = async (chapter: ChapterType) => {
+    if (loading[chapter]) {
+      message.warning('正在生成，请稍后再试');
+      return;
+    }
+
     const content = chapterContents[chapter];
     if (!content) {
       message.error('没有可导出的内容');
@@ -248,88 +272,136 @@ function App() {
     }
   };
 
-  const renderChapterPanel = (chapter: ChapterType) => (
-    <div style={{ display: 'flex', gap: '16px' }}>
-      <div style={{ flex: '0 0 450px' }}>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <DataInput
-            title="输入数据"
-            placeholder={DATA_PLACEHOLDER}
-            value={chapterData[chapter]}
-            onChange={(value) => setChapterData(prev => ({ ...prev, [chapter]: value }))}
-            rows={25}
+  const handleExportFullReport = async () => {
+    if (!fullReportContent.trim()) {
+      message.error('没有可导出的内容');
+      return;
+    }
+
+    try {
+      const blob = await exportToWord(fullReportContent, '事件报告');
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '事件报告.docx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      message.success('整份报告导出成功');
+    } catch (error: any) {
+      message.error(error.response?.data?.detail || '导出失败');
+    }
+  };
+
+  const handleChapterTabChange = (chapter: ChapterType) => {
+    const ref = chapterRefs[chapter]?.current;
+    if (ref) {
+      ref.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    setActiveChapter(chapter);
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      let currentChapter: ChapterType | null = null;
+      for (const { key } of CHAPTERS) {
+        const ref = chapterRefs[key]?.current;
+        if (ref) {
+          const rect = ref.getBoundingClientRect();
+          if (rect.top <= 140 && rect.bottom > 140) {
+            currentChapter = key;
+            break;
+          }
+        }
+      }
+
+      if (!currentChapter) {
+        const lastChapter = CHAPTERS[CHAPTERS.length - 1]?.key;
+        const lastRef = chapterRefs[lastChapter]?.current;
+        if (lastRef && lastRef.getBoundingClientRect().top < 140) {
+          currentChapter = lastChapter;
+        }
+      }
+
+      if (currentChapter && currentChapter !== activeChapter) {
+        setActiveChapter(currentChapter);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [activeChapter, chapterRefs]);
+
+  const reportTabContent = (
+    <div>
+      <Affix offsetTop={88}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            padding: '10px 16px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            borderRadius: 16,
+            boxShadow: '0 8px 24px -18px rgba(0,0,0,0.35)',
+            backdropFilter: 'blur(6px)',
+            border: '1px solid rgba(0,0,0,0.06)',
+            zIndex: 10
+          }}
+        >
+          <Segmented
+            options={CHAPTERS.map(({ key, label }) => ({
+              label,
+              value: key
+            }))}
+            value={activeChapter}
+            onChange={(value) => handleChapterTabChange(value as ChapterType)}
+            size="small"
+            style={{ minWidth: 320 }}
           />
-
-          {exampleFiles.length > 0 && (
-            <div
-              style={{
-                padding: '12px',
-                background: '#f0f9ff',
-                border: '1px solid #91caff',
-                borderRadius: '6px',
-                fontSize: '13px'
-              }}
-            >
-              <div style={{ fontWeight: 500, marginBottom: 4 }}>
-                📚 已加载 {exampleFiles.length} 个示例文档
-              </div>
-              <div style={{ color: '#666' }}>
-                {exampleFiles.map(f => f.name).join(', ')}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>选择Prompt模板</div>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="使用默认模板"
-              allowClear
-              value={selectedTemplates[chapter] || undefined}
-              onChange={(value) => setSelectedTemplates(prev => ({ ...prev, [chapter]: value || '' }))}
-            >
-              {templates[chapter].map(template => (
-                <Select.Option key={template.id} value={template.id}>
-                  {template.name} {template.is_default && '(默认)'}
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-
           <Button
-            type="primary"
-            size="large"
-            block
-            onClick={() => handleGenerate(chapter)}
-            loading={loading[chapter]}
-            disabled={!chapterData[chapter].trim()}
+            icon={<EyeOutlined />}
+            onClick={() => setIsPreviewVisible(true)}
+            disabled={!hasPartialContent}
           >
-            生成报告
+            预览整份报告
           </Button>
-        </Space>
-      </div>
-
-      <div style={{ flex: 1 }}>
-        <ReportEditor
-          content={chapterContents[chapter]}
-          onChange={(content) => handleContentChange(chapter, content)}
-          onExport={() => handleExport(chapter)}
-          loading={loading[chapter]}
-        />
-      </div>
+        </div>
+      </Affix>
+      <Space direction="vertical" size={24} style={{ width: '100%', marginTop: 16 }}>
+        {CHAPTERS.map(({ key, label }) => (
+          <div key={key} ref={chapterRefs[key]} id={key}>
+            <ChapterSection
+              title={label}
+              dataPlaceholder={DATA_PLACEHOLDER}
+              dataValue={chapterData[key]}
+              onDataChange={(value) =>
+                setChapterData(prev => ({ ...prev, [key]: value }))
+              }
+              contentValue={chapterContents[key]}
+              onContentChange={(content) => handleContentChange(key, content)}
+              loading={loading[key]}
+              onGenerate={() => handleGenerate(key)}
+              onExport={() => handleExport(key)}
+              templates={templates[key]}
+              selectedTemplateId={selectedTemplates[key] || ''}
+              onTemplateSelect={(value) =>
+                setSelectedTemplates(prev => ({ ...prev, [key]: value }))
+              }
+              exampleFiles={exampleFiles}
+            />
+          </div>
+        ))}
+      </Space>
+      <FullReportPreview
+        open={isPreviewVisible}
+        onClose={() => setIsPreviewVisible(false)}
+        content={fullReportContent}
+        onExport={handleExportFullReport}
+        hasPartialContent={hasPartialContent}
+      />
     </div>
-  );
-
-  const renderReportContent = () => (
-    <Tabs
-      activeKey={activeChapter}
-      onChange={(key) => setActiveChapter(key as ChapterType)}
-      items={CHAPTERS.map(({ key, label }) => ({
-        key,
-        label,
-        children: renderChapterPanel(key)
-      }))}
-    />
   );
 
   return (
@@ -351,7 +423,7 @@ function App() {
                     报告生成
                   </span>
                 ),
-                children: renderReportContent()
+                children: reportTabContent
               },
               {
                 key: 'examples',

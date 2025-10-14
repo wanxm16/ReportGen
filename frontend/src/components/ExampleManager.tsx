@@ -1,7 +1,6 @@
 import React from 'react';
-import { Card, Upload, List, Button, message, Space } from 'antd';
+import { Card, Upload, List, Button, message } from 'antd';
 import { UploadOutlined, DeleteOutlined, FileMarkdownOutlined } from '@ant-design/icons';
-import type { UploadFile } from 'antd';
 
 interface ExampleManagerProps {
   exampleFiles: Array<{ id: string; name: string }>;

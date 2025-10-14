@@ -126,7 +126,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ onSave }) => {
     );
   }
 
-  const renderChapterEditor = (chapter: 'chapter_1' | 'chapter_2', title: string) => (
+  const renderChapterEditor = (chapter: 'chapter_1' | 'chapter_2') => (
     <Card>
       <Alert
         message="Prompt模板说明"
@@ -196,12 +196,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ onSave }) => {
           {
             key: 'chapter_1',
             label: '一、全区社会治理基本情况',
-            children: renderChapterEditor('chapter_1', '全区社会治理基本情况'),
+            children: renderChapterEditor('chapter_1'),
           },
           {
             key: 'chapter_2',
             label: '二、高频社会治理问题隐患分析研判',
-            children: renderChapterEditor('chapter_2', '高频社会治理问题隐患分析研判'),
+            children: renderChapterEditor('chapter_2'),
           },
         ]}
       />
