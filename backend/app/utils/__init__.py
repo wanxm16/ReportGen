@@ -3,8 +3,8 @@
 import uuid
 from pathlib import Path
 from docx import Document
-from docx.shared import Pt, RGBColor
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.shared import Pt
+from docx.oxml.ns import qn
 import markdown
 from bs4 import BeautifulSoup
 import re
@@ -49,6 +49,21 @@ def markdown_to_docx(markdown_text: str, output_path: str):
         output_path: Path to save the Word document
     """
     doc = Document()
+
+    # Configure default font style
+    normal_style = doc.styles['Normal']
+    normal_font = normal_style.font
+    normal_font.name = 'SimSun'
+    normal_font.size = Pt(12)
+    normal_font.element.rPr.rFonts.set(qn('w:eastAsia'), 'SimSun')
+
+    # Ensure heading styles also use SimSun
+    for heading_style in ['Heading 1', 'Heading 2', 'Heading 3']:
+        if heading_style in doc.styles:
+            style = doc.styles[heading_style]
+            font = style.font
+            font.name = 'SimSun'
+            font.element.rPr.rFonts.set(qn('w:eastAsia'), 'SimSun')
 
     # Parse markdown to HTML first
     html = markdown.markdown(markdown_text, extensions=['tables', 'nl2br'])

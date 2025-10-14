@@ -1,23 +1,17 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from enum import Enum
-
-
-class ChapterType(str, Enum):
-    CHAPTER_1 = "chapter_1"  # 全区社会治理基本情况
-    CHAPTER_2 = "chapter_2"  # 高频社会治理问题隐患分析研判
-    CHAPTER_3 = "chapter_3"  # 社情民意热点问题分析预警
-    CHAPTER_4 = "chapter_4"  # 事件处置解决情况分析
 
 
 class GenerateReportRequest(BaseModel):
-    chapter: ChapterType
+    project_id: Optional[str] = None
+    chapter: str
     data_file_id: str
     example_files: Optional[List[str]] = []
 
 
 class GenerateReportWithTextRequest(BaseModel):
-    chapter: ChapterType
+    project_id: Optional[str] = None
+    chapter: str
     data_text: str
     example_file_ids: Optional[List[str]] = []
     template_id: Optional[str] = None  # Optional template ID to use
@@ -25,7 +19,7 @@ class GenerateReportWithTextRequest(BaseModel):
 
 class GenerateReportResponse(BaseModel):
     success: bool
-    chapter: ChapterType
+    chapter: str
     content: str
     error: Optional[str] = None
 
@@ -51,10 +45,12 @@ class PromptTemplate(BaseModel):
     is_default: bool
     created_at: str
     updated_at: str
+    project_id: Optional[str] = None
 
 
 class CreateTemplateRequest(BaseModel):
-    chapter: ChapterType
+    project_id: Optional[str] = None
+    chapter: str
     name: str
     system_prompt: str
     user_prompt_template: str
@@ -62,7 +58,25 @@ class CreateTemplateRequest(BaseModel):
 
 
 class UpdateTemplateRequest(BaseModel):
+    project_id: Optional[str] = None
     name: Optional[str] = None
     system_prompt: Optional[str] = None
     user_prompt_template: Optional[str] = None
     is_default: Optional[bool] = None
+
+
+class Project(BaseModel):
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+
+
+class CreateProjectRequest(BaseModel):
+    name: str
+
+
+class Chapter(BaseModel):
+    id: str
+    title: str
+    order: int

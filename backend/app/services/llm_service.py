@@ -143,7 +143,8 @@ class LLMService:
     def analyze_examples_and_generate_prompt(
         self,
         chapter_contents: list[str],
-        chapter_type: str
+        chapter_type: str,
+        chapter_title: str | None = None
     ) -> dict:
         """Analyze example documents and generate prompt template
 
@@ -155,7 +156,7 @@ class LLMService:
             Dictionary with 'system_prompt' and 'user_prompt_template'
         """
         # Build analysis prompt
-        chapter_name = CHAPTER_DISPLAY_NAMES.get(chapter_type, chapter_type)
+        chapter_name = chapter_title or CHAPTER_DISPLAY_NAMES.get(chapter_type, chapter_type)
 
         # Combine all examples
         examples_text = "\n\n---\n\n".join([

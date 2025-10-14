@@ -3,25 +3,27 @@
 import copy
 import json
 import uuid
-from pathlib import Path
-from typing import Dict, Optional, List
 from datetime import datetime
+from typing import Dict, List, Optional
 
-PROMPTS_DIR = Path("prompts")
-TEMPLATES_FILE = PROMPTS_DIR / "templates.json"
-
-# Default templates for each chapter
 from ..constants import CHAPTER_DISPLAY_NAMES, CHAPTER_TITLES
+from .project_manager import ProjectManager
 
 
-DEFAULT_TEMPLATES = {
-    "chapter_1": [
-        {
-            "id": "default_chapter_1",
-            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_1']}",
-            "chapter": "chapter_1",
-            "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
-            "user_prompt_template": """请根据以下数据生成【全区社会治理基本情况】章节的报告内容。
+def _timestamp() -> str:
+    return datetime.utcnow().isoformat()
+
+
+def _build_default_templates() -> Dict[str, List[Dict]]:
+    now = _timestamp()
+    return {
+        "chapter_1": [
+            {
+                "id": "default_chapter_1",
+                "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_1']}",
+                "chapter": "chapter_1",
+                "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
+                "user_prompt_template": """请根据以下数据生成【全区社会治理基本情况】章节的报告内容。
 
 # 数据
 {data_summary}
@@ -34,18 +36,18 @@ DEFAULT_TEMPLATES = {
 使用Markdown格式，包含标题、段落和表格。表格必须使用标准的Markdown表格格式。
 
 {examples_text}""",
-            "is_default": True,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-    ],
-    "chapter_2": [
-        {
-            "id": "default_chapter_2",
-            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_2']}",
-            "chapter": "chapter_2",
-            "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
-            "user_prompt_template": """请根据以下数据生成【高频社会治理问题隐患分析研判】章节的报告内容。
+                "is_default": True,
+                "created_at": now,
+                "updated_at": now
+            }
+        ],
+        "chapter_2": [
+            {
+                "id": "default_chapter_2",
+                "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_2']}",
+                "chapter": "chapter_2",
+                "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
+                "user_prompt_template": """请根据以下数据生成【高频社会治理问题隐患分析研判】章节的报告内容。
 
 # 数据
 {data_summary}
@@ -59,18 +61,18 @@ DEFAULT_TEMPLATES = {
 使用Markdown格式，包含标题、段落和必要的表格。
 
 {examples_text}""",
-            "is_default": True,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-    ],
-    "chapter_3": [
-        {
-            "id": "default_chapter_3",
-            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_3']}",
-            "chapter": "chapter_3",
-            "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
-            "user_prompt_template": f"""请根据以下数据生成【{CHAPTER_DISPLAY_NAMES['chapter_3']}】章节的报告内容。
+                "is_default": True,
+                "created_at": now,
+                "updated_at": now
+            }
+        ],
+        "chapter_3": [
+            {
+                "id": "default_chapter_3",
+                "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_3']}",
+                "chapter": "chapter_3",
+                "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
+                "user_prompt_template": f"""请根据以下数据生成【{CHAPTER_DISPLAY_NAMES['chapter_3']}】章节的报告内容。
 
 # 数据
 {{data_summary}}
@@ -86,18 +88,18 @@ DEFAULT_TEMPLATES = {
 - 建议部分使用无序列表，确保条目清晰可执行
 
 {{examples_text}}""",
-            "is_default": True,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-    ],
-    "chapter_4": [
-        {
-            "id": "default_chapter_4",
-            "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_4']}",
-            "chapter": "chapter_4",
-            "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
-            "user_prompt_template": f"""请根据以下数据生成【{CHAPTER_DISPLAY_NAMES['chapter_4']}】章节的报告内容。
+                "is_default": True,
+                "created_at": now,
+                "updated_at": now
+            }
+        ],
+        "chapter_4": [
+            {
+                "id": "default_chapter_4",
+                "name": f"默认模板 - {CHAPTER_DISPLAY_NAMES['chapter_4']}",
+                "chapter": "chapter_4",
+                "system_prompt": "你是一位专业的社会治理数据分析师，擅长编写结构化的报告。",
+                "user_prompt_template": f"""请根据以下数据生成【{CHAPTER_DISPLAY_NAMES['chapter_4']}】章节的报告内容。
 
 # 数据
 {{data_summary}}
@@ -113,95 +115,155 @@ DEFAULT_TEMPLATES = {
 - 如需展示指标对比，可使用Markdown表格或列表，确保格式规范
 
 {{examples_text}}""",
-            "is_default": True,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-    ]
-}
+                "is_default": True,
+                "created_at": now,
+                "updated_at": now
+            }
+        ]
+    }
 
 
 class PromptManager:
     """Manage prompt templates"""
 
     @staticmethod
-    def _ensure_dir():
-        """Ensure prompts directory exists"""
-        PROMPTS_DIR.mkdir(exist_ok=True)
+    def _initial_templates(project_id: str) -> Dict[str, List[Dict]]:
+        if project_id == ProjectManager.DEFAULT_PROJECT_ID:
+            return _build_default_templates()
+        return {}
 
     @staticmethod
-    def load_all_templates() -> Dict[str, List[Dict]]:
-        """Load all prompt templates from file
+    def load_all_templates(project_id: str) -> Dict[str, List[Dict]]:
+        """Load all prompt templates for a project"""
+        project_id = ProjectManager.resolve_project_id(project_id)
+        paths = ProjectManager.ensure_project_dirs(project_id)
+        templates_file = paths.prompts_file
 
-        Returns:
-            Dictionary mapping chapter to list of templates
-        """
-        import copy
-
-        PromptManager._ensure_dir()
-
-        if not TEMPLATES_FILE.exists():
-            # Initialize with default templates
-            initial_templates = copy.deepcopy(DEFAULT_TEMPLATES)
-            PromptManager._save_all_templates(initial_templates)
-            return initial_templates
+        if not templates_file.exists():
+            templates = PromptManager._initial_templates(project_id)
+            PromptManager._save_all_templates(project_id, templates)
+            return templates
 
         try:
-            with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
-                templates = json.load(f)
-                # Ensure all chapters have at least default template
-                updated = False
-                for chapter, defaults in DEFAULT_TEMPLATES.items():
-                    if chapter not in templates or not templates[chapter]:
-                        templates[chapter] = copy.deepcopy(defaults)
-                        updated = True
-                if updated:
-                    PromptManager._save_all_templates(templates)
-                return templates
-        except Exception as e:
-            print(f"Warning: Failed to load templates: {e}")
-            return copy.deepcopy(DEFAULT_TEMPLATES)
+            with open(templates_file, 'r', encoding='utf-8') as file:
+                templates = json.load(file)
+        except Exception as exc:
+            print(f"Warning: Failed to load templates for project {project_id}: {exc}")
+            templates = PromptManager._initial_templates(project_id)
+            PromptManager._save_all_templates(project_id, templates)
+            return templates
+
+        if project_id == ProjectManager.DEFAULT_PROJECT_ID:
+            defaults = _build_default_templates()
+            updated = False
+            for chapter, default_list in defaults.items():
+                if chapter not in templates or not templates[chapter]:
+                    templates[chapter] = copy.deepcopy(default_list)
+                    updated = True
+            if updated:
+                PromptManager._save_all_templates(project_id, templates)
+
+        return templates
 
     @staticmethod
-    def _save_all_templates(templates: Dict[str, List[Dict]]) -> None:
-        """Save all templates to file
-
-        Args:
-            templates: Dictionary mapping chapter to list of templates
-        """
-        PromptManager._ensure_dir()
-
-        try:
-            with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(templates, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Error: Failed to save templates: {e}")
-            raise
+    def _save_all_templates(project_id: str, templates: Dict[str, List[Dict]]) -> None:
+        paths = ProjectManager.ensure_project_dirs(project_id)
+        paths.prompts_dir.mkdir(parents=True, exist_ok=True)
+        with open(paths.prompts_file, 'w', encoding='utf-8') as file:
+            json.dump(templates, file, ensure_ascii=False, indent=2)
 
     @staticmethod
-    def get_templates_by_chapter(chapter: str) -> List[Dict]:
-        """Get all templates for a specific chapter
+    def replace_all_templates(project_id: str, templates: Dict[str, List[Dict]]) -> None:
+        """Replace all templates for a project at once."""
+        PromptManager._save_all_templates(project_id, templates)
 
-        Args:
-            chapter: Chapter identifier (e.g., 'chapter_1')
+    @staticmethod
+    def get_canonical_template(chapter: str) -> Optional[Dict]:
+        """Return canonical default template for a chapter."""
+        defaults = _build_default_templates()
+        base = copy.deepcopy(defaults.get(chapter, [{}])[0]) if defaults.get(chapter) else None
+        overrides: Dict[str, Dict[str, str]] = {
+            "chapter_2": {
+                "system_prompt": "你是一位资深社会治理风险分析师，擅长对高频社会治理问题和隐患进行研判、分级预警并提出针对性化解举措。请保持正式、专业的政府公文语气，逻辑清晰、数据准确。",
+                "user_prompt_template": (
+                    "请根据以下数据生成结构完整的《二、高频社会治理问题隐患分析研判》章节。\n\n"
+                    "# 数据\n{data_summary}\n\n"
+                    "# 写作要求\n"
+                    "1. 识别不少于 3 类高频问题，说明事件数量、占比及环比/同比变化；\n"
+                    "2. 对每类问题开展风险研判：成因、影响范围、潜在风险等级；\n"
+                    "3. 提出针对性化解举措，每类问题至少提供 2 条建议，明确责任单位、措施、时限；\n"
+                    "4. 结尾给出总体研判结论和下一步工作重点。\n\n"
+                    "# 输出格式\n"
+                    "## 二、高频社会治理问题隐患分析研判\n\n"
+                    "### （一）总体态势\n"
+                    "- 用 3~4 句概括总体事件量、环比趋势、重点领域。\n"
+                    "- 使用 Markdown 表格呈现关键指标：\n"
+                    "| 问题类型 | 当月数量 | 占比 | 环比 | 风险等级 | 主要诉求 |\n"
+                    "|----------|----------|------|------|----------|----------|\n"
+                    "| …… | …… | …… | …… | …… | …… |\n\n"
+                    "### （二）重点问题风险研判\n"
+                    "#### 1. ……问题\n"
+                    "- 数据概览：……\n"
+                    "- 风险研判：……（成因、影响范围、风险等级）\n"
+                    "- 典型案例或征兆：……\n\n"
+                    "### （三）重点领域预警建议\n"
+                    "- • 责任单位：……｜措施：……｜时限：……\n"
+                    "- • 责任单位：……｜措施：……｜时限：……\n\n"
+                    "### （四）综合评估与下一步工作\n"
+                    "- ……（总结整体研判结论，明确下一阶段重点工作）\n\n"
+                    "# 注意事项\n"
+                    "- 表格使用标准 Markdown 语法，数据缺失用“/”；\n"
+                    "- 语言正式、客观，避免口语化或情绪化表达。\n\n"
+                    "{examples_text}"
+                )
+            },
+            "chapter_3": {
+                "system_prompt": "你是一位专业的舆情研判分析师，擅长基于民意数据进行热点风险预警。请保持政府公文风格，做到结构严谨、数据准确、语言精炼。",
+                "user_prompt_template": (
+                    "请根据以下数据生成结构完整的《三、社情民意热点问题分析预警》章节。\n\n"
+                    "# 数据\n{data_summary}\n\n"
+                    "# 要求\n"
+                    "1. 识别不少于 3 个热点问题，列出问题类型、数量、环比变化、主要诉求；\n"
+                    "2. 对每个热点开展风险研判，说明成因、影响范围、风险等级；\n"
+                    "3. 提出针对性预警或处置建议，明确责任单位、措施、时间节点；\n"
+                    "4. 结尾需给出总体预警结论。\n\n"
+                    "# 输出格式\n"
+                    "## 三、社情民意热点问题分析预警\n\n"
+                    "### （一）总体态势\n"
+                    "- 概括整体诉求热点和波动趋势，列出关键数据。\n\n"
+                    "### （二）热点问题研判\n"
+                    "#### 1. ……热点问题\n"
+                    "- 数据概览：……\n"
+                    "- 风险研判：……（成因、影响范围、风险等级）\n"
+                    "- 典型案例：……\n\n"
+                    "### （三）预警建议\n"
+                    "- • 责任单位：……｜措施：……｜时限：……\n"
+                    "- • ……\n\n"
+                    "### （四）综合研判结论\n"
+                    "- ……总结整体风险态势与下一步预警重点。\n\n"
+                    "{examples_text}"
+                )
+            },
+            "chapter_4": {
+                "system_prompt": "你是一位专业的政府工作报告撰写专家，专注于事件处置解决情况分析。请保持正式、规范的公文语气，善于总结问题并提出可操作的建议。"
+            }
+        }
+        if base:
+            if chapter in overrides:
+                base.update(overrides[chapter])
+            return base
+        if chapter in overrides:
+            return overrides[chapter]
+        return None
 
-        Returns:
-            List of template dictionaries
-        """
-        templates = PromptManager.load_all_templates()
+    @staticmethod
+    def get_templates_by_chapter(project_id: str, chapter: str) -> List[Dict]:
+        templates = PromptManager.load_all_templates(project_id)
         return templates.get(chapter, [])
 
     @staticmethod
-    def get_template_by_id(template_id: str) -> Optional[Dict]:
-        """Get a specific template by ID
-
-        Args:
-            template_id: Template ID
-
-        Returns:
-            Template dictionary or None
-        """
-        templates = PromptManager.load_all_templates()
+    def get_template_by_id(project_id: str, template_id: str) -> Optional[Dict]:
+        templates = PromptManager.load_all_templates(project_id)
         for chapter_templates in templates.values():
             for template in chapter_templates:
                 if template['id'] == template_id:
@@ -209,58 +271,40 @@ class PromptManager:
         return None
 
     @staticmethod
-    def get_default_template(chapter: str) -> Optional[Dict]:
-        """Get the default template for a chapter
+    def get_default_template(project_id: str, chapter: str) -> Optional[Dict]:
+        chapter_templates = PromptManager.get_templates_by_chapter(project_id, chapter)
+        if chapter_templates:
+            for template in chapter_templates:
+                if template.get('is_default'):
+                    return template
+            return chapter_templates[0]
 
-        Args:
-            chapter: Chapter identifier
+        if project_id != ProjectManager.DEFAULT_PROJECT_ID:
+            default_templates = PromptManager.load_all_templates(ProjectManager.DEFAULT_PROJECT_ID)
+            fallback_list = default_templates.get(chapter, [])
+            if fallback_list:
+                return copy.deepcopy(fallback_list[0])
 
-        Returns:
-            Default template or first template
-        """
-        templates = PromptManager.get_templates_by_chapter(chapter)
-        if not templates:
-            return None
-
-        # Find template marked as default
-        for template in templates:
-            if template.get('is_default'):
-                return template
-
-        # Return first template if no default marked
-        return templates[0]
+        return None
 
     @staticmethod
     def create_template(
+        project_id: str,
         chapter: str,
         name: str,
         system_prompt: str,
         user_prompt_template: str,
         is_default: bool = False
     ) -> Dict:
-        """Create a new template
+        templates = PromptManager.load_all_templates(project_id)
 
-        Args:
-            chapter: Chapter identifier
-            name: Template name
-            system_prompt: System prompt text
-            user_prompt_template: User prompt template
-            is_default: Whether this is the default template
-
-        Returns:
-            Created template
-        """
-        templates = PromptManager.load_all_templates()
-
-        # Generate unique ID
         template_id = str(uuid.uuid4())
+        timestamp = _timestamp()
 
-        # If setting as default, unmark other defaults
         if is_default and chapter in templates:
             for template in templates[chapter]:
                 template['is_default'] = False
 
-        # Create new template
         new_template = {
             "id": template_id,
             "name": name,
@@ -268,45 +312,31 @@ class PromptManager:
             "system_prompt": system_prompt,
             "user_prompt_template": user_prompt_template,
             "is_default": is_default,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "created_at": timestamp,
+            "updated_at": timestamp
         }
 
-        # Add to templates
         if chapter not in templates:
             templates[chapter] = []
         templates[chapter].append(new_template)
 
-        PromptManager._save_all_templates(templates)
+        PromptManager._save_all_templates(project_id, templates)
         return new_template
 
     @staticmethod
     def update_template(
+        project_id: str,
         template_id: str,
         name: Optional[str] = None,
         system_prompt: Optional[str] = None,
         user_prompt_template: Optional[str] = None,
         is_default: Optional[bool] = None
     ) -> Optional[Dict]:
-        """Update an existing template
+        templates = PromptManager.load_all_templates(project_id)
 
-        Args:
-            template_id: Template ID
-            name: New name (optional)
-            system_prompt: New system prompt (optional)
-            user_prompt_template: New user prompt template (optional)
-            is_default: Whether this is the default (optional)
-
-        Returns:
-            Updated template or None if not found
-        """
-        templates = PromptManager.load_all_templates()
-
-        # Find and update template
         for chapter, chapter_templates in templates.items():
-            for i, template in enumerate(chapter_templates):
+            for template in chapter_templates:
                 if template['id'] == template_id:
-                    # Update fields
                     if name is not None:
                         template['name'] = name
                     if system_prompt is not None:
@@ -315,45 +345,32 @@ class PromptManager:
                         template['user_prompt_template'] = user_prompt_template
                     if is_default is not None:
                         if is_default:
-                            # Unmark other defaults in same chapter
-                            for t in chapter_templates:
-                                t['is_default'] = False
+                            for other in chapter_templates:
+                                other['is_default'] = False
                         template['is_default'] = is_default
 
-                    template['updated_at'] = datetime.now().isoformat()
-
-                    PromptManager._save_all_templates(templates)
+                    template['updated_at'] = _timestamp()
+                    PromptManager._save_all_templates(project_id, templates)
                     return template
 
         return None
 
     @staticmethod
-    def delete_template(template_id: str) -> bool:
-        """Delete a template
-
-        Args:
-            template_id: Template ID
-
-        Returns:
-            True if deleted, False if not found or is default
-        """
-        templates = PromptManager.load_all_templates()
+    def delete_template(project_id: str, template_id: str) -> bool:
+        templates = PromptManager.load_all_templates(project_id)
 
         for chapter, chapter_templates in templates.items():
-            for i, template in enumerate(chapter_templates):
+            for index, template in enumerate(chapter_templates):
                 if template['id'] == template_id:
-                    # Don't allow deleting the last template
                     if len(chapter_templates) == 1:
                         return False
 
-                    # Remove template
-                    chapter_templates.pop(i)
+                    removed = chapter_templates.pop(index)
 
-                    # If deleted template was default, mark first as default
-                    if template.get('is_default') and chapter_templates:
+                    if removed.get('is_default') and chapter_templates:
                         chapter_templates[0]['is_default'] = True
 
-                    PromptManager._save_all_templates(templates)
+                    PromptManager._save_all_templates(project_id, templates)
                     return True
 
         return False

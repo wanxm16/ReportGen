@@ -3,49 +3,56 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
+
 from ..models import (
     PromptTemplate,
     CreateTemplateRequest,
-    UpdateTemplateRequest,
-    ChapterType
+    UpdateTemplateRequest
 )
+from ..services.project_manager import ProjectManager
 from ..services.prompt_manager import PromptManager
 from ..services.prompt_generator import PromptGenerator
-from ..constants import ALL_CHAPTERS, CHAPTER_DISPLAY_NAMES
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
 
 class GeneratePromptRequest(BaseModel):
     """Request model for generating prompt from examples"""
-    chapter: ChapterType
+    project_id: Optional[str] = None
+    chapter: str
+    chapter_title: Optional[str] = None
     example_file_ids: Optional[List[str]] = None  # If None, use all available examples
 
 
 class GenerateAllChaptersRequest(BaseModel):
     """Request model for generating all chapter prompts in batch"""
+    project_id: Optional[str] = None
     example_file_ids: Optional[List[str]] = None
 
 
 @router.get("/templates", response_model=List[PromptTemplate])
-async def get_all_templates():
+async def get_all_templates(project_id: Optional[str] = None):
     """Get all prompt templates
 
     Returns:
         List of all templates
     """
     try:
-        all_templates = PromptManager.load_all_templates()
+        resolved_project_id = ProjectManager.resolve_project_id(project_id)
+        all_templates = PromptManager.load_all_templates(resolved_project_id)
         result = []
         for chapter_templates in all_templates.values():
-            result.extend(chapter_templates)
+            for template in chapter_templates:
+                template_with_project = dict(template)
+                template_with_project["project_id"] = resolved_project_id
+                result.append(template_with_project)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load templates: {str(e)}")
 
 
 @router.get("/templates/chapter/{chapter}", response_model=List[PromptTemplate])
-async def get_templates_by_chapter(chapter: ChapterType):
+async def get_templates_by_chapter(chapter: str, project_id: Optional[str] = None):
     """Get all templates for a specific chapter
 
     Args:
@@ -55,14 +62,18 @@ async def get_templates_by_chapter(chapter: ChapterType):
         List of templates for the chapter
     """
     try:
-        templates = PromptManager.get_templates_by_chapter(chapter.value)
-        return templates
+        resolved_project_id = ProjectManager.resolve_project_id(project_id)
+        templates = PromptManager.get_templates_by_chapter(resolved_project_id, chapter)
+        return [
+            {**template, "project_id": resolved_project_id}
+            for template in templates
+        ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get templates: {str(e)}")
 
 
 @router.get("/templates/{template_id}", response_model=PromptTemplate)
-async def get_template_by_id(template_id: str):
+async def get_template_by_id(template_id: str, project_id: Optional[str] = None):
     """Get a specific template by ID
 
     Args:
@@ -72,10 +83,13 @@ async def get_template_by_id(template_id: str):
         Template details
     """
     try:
-        template = PromptManager.get_template_by_id(template_id)
+        resolved_project_id = ProjectManager.resolve_project_id(project_id)
+        template = PromptManager.get_template_by_id(resolved_project_id, template_id)
         if not template:
             raise HTTPException(status_code=404, detail=f"Template not found: {template_id}")
-        return template
+        template_with_project = dict(template)
+        template_with_project["project_id"] = resolved_project_id
+        return template_with_project
     except HTTPException:
         raise
     except Exception as e:
@@ -93,14 +107,18 @@ async def create_template(request: CreateTemplateRequest):
         Created template
     """
     try:
+        resolved_project_id = ProjectManager.resolve_project_id(request.project_id)
         template = PromptManager.create_template(
-            chapter=request.chapter.value,
+            project_id=resolved_project_id,
+            chapter=request.chapter,
             name=request.name,
             system_prompt=request.system_prompt,
             user_prompt_template=request.user_prompt_template,
             is_default=request.is_default or False
         )
-        return template
+        template_with_project = dict(template)
+        template_with_project["project_id"] = resolved_project_id
+        return template_with_project
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create template: {str(e)}")
 
@@ -117,7 +135,9 @@ async def update_template(template_id: str, request: UpdateTemplateRequest):
         Updated template
     """
     try:
+        resolved_project_id = ProjectManager.resolve_project_id(request.project_id)
         template = PromptManager.update_template(
+            project_id=resolved_project_id,
             template_id=template_id,
             name=request.name,
             system_prompt=request.system_prompt,
@@ -126,7 +146,9 @@ async def update_template(template_id: str, request: UpdateTemplateRequest):
         )
         if not template:
             raise HTTPException(status_code=404, detail=f"Template not found: {template_id}")
-        return template
+        template_with_project = dict(template)
+        template_with_project["project_id"] = resolved_project_id
+        return template_with_project
     except HTTPException:
         raise
     except Exception as e:
@@ -134,7 +156,7 @@ async def update_template(template_id: str, request: UpdateTemplateRequest):
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: str):
+async def delete_template(template_id: str, project_id: Optional[str] = None):
     """Delete a template
 
     Args:
@@ -144,13 +166,14 @@ async def delete_template(template_id: str):
         Success response
     """
     try:
-        success = PromptManager.delete_template(template_id)
+        resolved_project_id = ProjectManager.resolve_project_id(project_id)
+        success = PromptManager.delete_template(resolved_project_id, template_id)
         if not success:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot delete template (not found or is the last template)"
             )
-        return {"success": True, "message": "Template deleted"}
+        return {"success": True, "message": "Template deleted", "project_id": resolved_project_id}
     except HTTPException:
         raise
     except Exception as e:
@@ -172,19 +195,22 @@ async def generate_prompt_from_examples(request: GeneratePromptRequest):
         Generated prompt template with system_prompt and user_prompt_template
     """
     try:
-        generator = PromptGenerator()
+        resolved_project_id = ProjectManager.resolve_project_id(request.project_id)
+        generator = PromptGenerator(resolved_project_id)
 
         # If no specific examples provided, use all available examples
         if not request.example_file_ids:
             print("[API] No example IDs provided, using all available examples")
             result = generator.generate_from_all_examples(
-                chapter_type=request.chapter.value
+                chapter_type=request.chapter,
+                chapter_title=request.chapter_title
             )
         else:
             print(f"[API] Generating prompt from {len(request.example_file_ids)} example(s)")
             result = generator.generate_from_examples(
                 example_file_ids=request.example_file_ids,
-                chapter_type=request.chapter.value
+                chapter_type=request.chapter,
+                chapter_title=request.chapter_title
             )
 
         return {
@@ -192,7 +218,8 @@ async def generate_prompt_from_examples(request: GeneratePromptRequest):
             "system_prompt": result["system_prompt"],
             "user_prompt_template": result["user_prompt_template"],
             "analyzed_examples": result["analyzed_examples"],
-            "chapter_type": result["chapter_type"]
+            "chapter_type": result["chapter_type"],
+            "project_id": resolved_project_id
         }
 
     except ValueError as e:
@@ -219,55 +246,66 @@ async def generate_all_chapters_prompts(request: Optional[GenerateAllChaptersReq
         Results for each chapter generation
     """
     try:
-        generator = PromptGenerator()
+        resolved_project_id = ProjectManager.resolve_project_id(
+            request.project_id if request else None
+        )
+        generator = PromptGenerator(resolved_project_id)
 
-        # Define all chapters in order
-        chapters = ALL_CHAPTERS
+        # Load chapters from project configuration
+        project_chapters = ProjectManager.get_chapters(resolved_project_id)
+        if not project_chapters:
+            raise HTTPException(status_code=400, detail="Project has no chapters configured")
 
         results = []
 
-        print(f"[API] Starting batch generation for {len(chapters)} chapters")
+        print(f"[API] Starting batch generation for {len(project_chapters)} chapters")
 
         example_file_ids = request.example_file_ids if request and request.example_file_ids else None
 
-        for chapter in chapters:
-            print(f"[API] Generating prompt for {chapter}...")
+        for chapter in project_chapters:
+            chapter_id = chapter["id"]
+            chapter_title = chapter.get("title", chapter_id)
+            print(f"[API] Generating prompt for {chapter_id} - {chapter_title}...")
 
             try:
                 # Generate prompt for this chapter
                 if not example_file_ids:
-                    result = generator.generate_from_all_examples(chapter_type=chapter)
+                    result = generator.generate_from_all_examples(
+                        chapter_type=chapter_id,
+                        chapter_title=chapter_title
+                    )
                 else:
                     result = generator.generate_from_examples(
                         example_file_ids=example_file_ids,
-                        chapter_type=chapter
+                        chapter_type=chapter_id,
+                        chapter_title=chapter_title
                     )
 
                 # Save the generated template
-                from ..services.prompt_manager import PromptManager
                 template = PromptManager.create_template(
-                    chapter=chapter,
-                    name=f"AI 批量生成 - {CHAPTER_DISPLAY_NAMES.get(chapter, chapter)}",
+                    project_id=resolved_project_id,
+                    chapter=chapter_id,
+                    name=f"AI 批量生成 - {chapter_title}",
                     system_prompt=result["system_prompt"],
                     user_prompt_template=result["user_prompt_template"],
                     is_default=False
                 )
 
                 results.append({
-                    "chapter": chapter,
-                    "chapter_name": CHAPTER_DISPLAY_NAMES.get(chapter, chapter),
+                    "chapter": chapter_id,
+                    "chapter_name": chapter_title,
                     "success": True,
                     "template_id": template["id"],
                     "analyzed_examples": result["analyzed_examples"]
                 })
 
-                print(f"[API] Successfully generated and saved template for {chapter}")
+                print(f"[API] Successfully generated and saved template for {chapter_id}")
 
             except Exception as e:
-                print(f"[API] Error generating {chapter}: {type(e).__name__}: {str(e)}")
+                print(f"[API] Error generating {chapter_id}: {type(e).__name__}: {str(e)}")
                 results.append({
-                    "chapter": chapter,
-                    "chapter_name": CHAPTER_DISPLAY_NAMES.get(chapter, chapter),
+                    "chapter": chapter_id,
+                    "chapter_name": chapter_title,
                     "success": False,
                     "error": str(e)
                 })
@@ -277,10 +315,11 @@ async def generate_all_chapters_prompts(request: Optional[GenerateAllChaptersReq
 
         return {
             "success": True,
-            "total_chapters": len(chapters),
+            "total_chapters": len(project_chapters),
             "successful": success_count,
-            "failed": len(chapters) - success_count,
-            "results": results
+            "failed": len(project_chapters) - success_count,
+            "results": results,
+            "project_id": resolved_project_id
         }
 
     except Exception as e:

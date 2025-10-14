@@ -10,15 +10,10 @@ from ..models import (
 )
 from ..services.report_generator import ReportGenerator
 from ..utils import markdown_to_docx
-from pathlib import Path
 import tempfile
 import os
 
 router = APIRouter(prefix="/api/report", tags=["report"])
-
-UPLOAD_DIR = "uploads"
-EXAMPLES_DIR = "examples"
-
 
 @router.post("/generate", response_model=GenerateReportResponse)
 async def generate_report_chapter(request: GenerateReportRequest):
@@ -31,32 +26,13 @@ async def generate_report_chapter(request: GenerateReportRequest):
         GenerateReportResponse with generated markdown content
     """
     try:
-        # Construct file paths
-        data_file_path = None
-        for ext in ['.csv']:
-            potential_path = Path(UPLOAD_DIR) / f"{request.data_file_id}{ext}"
-            if potential_path.exists():
-                data_file_path = str(potential_path)
-                break
-
-        if not data_file_path:
-            raise HTTPException(status_code=404, detail=f"Data file not found: {request.data_file_id}")
-
-        # Construct example file paths
-        example_file_paths = []
-        for file_id in request.example_files:
-            for ext in ['.md', '.markdown', '.docx', '.doc']:
-                potential_path = Path(EXAMPLES_DIR) / f"{file_id}{ext}"
-                if potential_path.exists():
-                    example_file_paths.append(str(potential_path))
-                    break
-
-        # Generate report chapter
+        # Generate report chapter within project scope
         generator = ReportGenerator()
         content = generator.generate_chapter(
-            chapter_type=request.chapter.value,
-            data_file_path=data_file_path,
-            example_file_paths=example_file_paths if example_file_paths else None
+            project_id=request.project_id,
+            chapter_type=request.chapter,
+            data_file_id=request.data_file_id,
+            example_file_ids=request.example_files if request.example_files else None
         )
 
         return GenerateReportResponse(
@@ -89,11 +65,13 @@ async def generate_report_chapter_with_text(request: GenerateReportWithTextReque
         print(f"[API] Data text length: {len(request.data_text)}")
         print(f"[API] Example file IDs: {request.example_file_ids}")
         print(f"[API] Template ID: {request.template_id}")
+        print(f"[API] Project ID: {request.project_id}")
 
         # Generate report chapter from text
         generator = ReportGenerator()
         content = generator.generate_chapter_with_text(
-            chapter_type=request.chapter.value,
+            project_id=request.project_id,
+            chapter_type=request.chapter,
             data_text=request.data_text,
             example_file_ids=request.example_file_ids if request.example_file_ids else None,
             template_id=request.template_id

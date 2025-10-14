@@ -32,6 +32,8 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 backend/examples/*
 !backend/examples/.gitkeep
+backend/projects/*
+!backend/projects/.gitkeep
 
 # Node
 node_modules/

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card,
   List,
@@ -23,11 +23,12 @@ import {
   BulbOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
+
 import {
   generatePromptFromExamples,
   getAllExamples,
   generateAllChaptersPrompts,
-  PromptChapterType
+  ProjectChapter
 } from '../services/api';
 
 const { TextArea } = Input;
@@ -36,7 +37,7 @@ const { Option } = Select;
 interface Template {
   id: string;
   name: string;
-  chapter: PromptChapterType;
+  chapter: string;
   system_prompt: string;
   user_prompt_template: string;
   is_default: boolean;
@@ -46,19 +47,20 @@ interface Template {
 
 const API_BASE = 'http://localhost:8000/api/prompts';
 
-const CHAPTER_NAMES: Record<PromptChapterType, string> = {
-  chapter_1: '一、全区社会治理基本情况',
-  chapter_2: '二、高频社会治理问题隐患分析研判',
-  chapter_3: '三、社情民意热点问题分析预警',
-  chapter_4: '四、事件处置解决情况分析'
-};
+const findChapterTitle = (chapters: ProjectChapter[], chapterId: string) =>
+  chapters.find(chapter => chapter.id === chapterId)?.title || chapterId;
 
-const CHAPTER_KEYS = Object.keys(CHAPTER_NAMES) as PromptChapterType[];
+interface PromptTemplateManagerProps {
+  projectId: string;
+  chapters: ProjectChapter[];
+  onTemplatesChanged?: () => void;
+}
 
-const getChapterLabel = (chapter: string, fallback?: string) =>
-  CHAPTER_NAMES[chapter as PromptChapterType] || fallback || chapter;
-
-export const PromptTemplateManager: React.FC = () => {
+export const PromptTemplateManager: React.FC<PromptTemplateManagerProps> = ({
+  projectId,
+  chapters,
+  onTemplatesChanged
+}) => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -68,14 +70,30 @@ export const PromptTemplateManager: React.FC = () => {
   const [hasExamples, setHasExamples] = useState(false);
 
   useEffect(() => {
+    if (!projectId) {
+      setTemplates([]);
+      setHasExamples(false);
+      return;
+    }
+
     loadTemplates();
     checkExamples();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!modalVisible && chapters.length > 0) {
+      form.setFieldsValue({ chapter: chapters[0].id });
+    }
+  }, [chapters, modalVisible, form]);
 
   const loadTemplates = async () => {
+    if (!projectId) {
+      return;
+    }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/templates`);
+      const response = await fetch(`${API_BASE}/templates?project_id=${projectId}`);
       const data = await response.json();
       setTemplates(data);
     } catch (error) {
@@ -88,7 +106,7 @@ export const PromptTemplateManager: React.FC = () => {
 
   const checkExamples = async () => {
     try {
-      const examples = await getAllExamples();
+      const examples = await getAllExamples(projectId);
       setHasExamples(examples.length > 0);
     } catch (error) {
       console.error('Check examples error:', error);
@@ -98,7 +116,9 @@ export const PromptTemplateManager: React.FC = () => {
   const handleCreate = () => {
     setEditingTemplate(null);
     form.resetFields();
-    form.setFieldsValue({ chapter: CHAPTER_KEYS[0] });
+    if (chapters.length > 0) {
+      form.setFieldsValue({ chapter: chapters[0].id });
+    }
     setModalVisible(true);
   };
 
@@ -112,22 +132,25 @@ export const PromptTemplateManager: React.FC = () => {
     try {
       const values = await form.validateFields();
 
+      const payload = {
+        ...values,
+        project_id: projectId
+      };
+
       if (editingTemplate) {
-        // Update existing template
         const response = await fetch(`${API_BASE}/templates/${editingTemplate.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values)
+          body: JSON.stringify(payload)
         });
 
         if (!response.ok) throw new Error('更新失败');
         message.success('模板更新成功');
       } else {
-        // Create new template
         const response = await fetch(`${API_BASE}/templates`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values)
+          body: JSON.stringify(payload)
         });
 
         if (!response.ok) throw new Error('创建失败');
@@ -136,6 +159,7 @@ export const PromptTemplateManager: React.FC = () => {
 
       setModalVisible(false);
       loadTemplates();
+      onTemplatesChanged?.();
     } catch (error: any) {
       message.error(error.message || '保存失败');
     }
@@ -143,7 +167,7 @@ export const PromptTemplateManager: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE}/templates/${id}`, {
+      const response = await fetch(`${API_BASE}/templates/${id}?project_id=${projectId}`, {
         method: 'DELETE'
       });
 
@@ -154,6 +178,7 @@ export const PromptTemplateManager: React.FC = () => {
 
       message.success('模板删除成功');
       loadTemplates();
+      onTemplatesChanged?.();
     } catch (error: any) {
       message.error(error.message || '删除失败');
     }
@@ -164,22 +189,25 @@ export const PromptTemplateManager: React.FC = () => {
       const response = await fetch(`${API_BASE}/templates/${template.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_default: true })
+        body: JSON.stringify({ is_default: true, project_id: projectId })
       });
 
       if (!response.ok) throw new Error('设置失败');
       message.success('已设置为默认模板');
       loadTemplates();
+      onTemplatesChanged?.();
     } catch (error: any) {
       message.error(error.message || '设置失败');
     }
   };
 
-  const handleGenerateFromExamples = async (chapter: PromptChapterType) => {
+  const handleGenerateFromExamples = async (chapterId: string) => {
     if (!hasExamples) {
       message.warning('请先上传示例文档');
       return;
     }
+
+    const chapterTitle = findChapterTitle(chapters, chapterId);
 
     Modal.confirm({
       title: '从示例文档生成 Prompt',
@@ -204,14 +232,13 @@ export const PromptTemplateManager: React.FC = () => {
         try {
           message.loading({ content: '正在分析示例文档并生成 Prompt...', key: 'generating', duration: 0 });
 
-          const result = await generatePromptFromExamples(chapter);
+          const result = await generatePromptFromExamples(chapterId, chapterTitle, projectId);
 
           message.success({ content: `成功分析 ${result.analyzed_examples} 个示例`, key: 'generating' });
 
-          // Fill form with generated prompt
           form.setFieldsValue({
-            name: `AI 生成 - ${CHAPTER_NAMES[chapter]}`,
-            chapter: chapter,
+            name: `AI 生成 - ${chapterTitle}`,
+            chapter: chapterId,
             system_prompt: result.system_prompt,
             user_prompt_template: result.user_prompt_template,
             is_default: false
@@ -241,8 +268,8 @@ export const PromptTemplateManager: React.FC = () => {
         <div>
           <p>将自动分析示例文档，依次生成所有章节的 Prompt 模板：</p>
           <ul>
-            {CHAPTER_KEYS.map((key) => (
-              <li key={key}>{CHAPTER_NAMES[key]}</li>
+            {chapters.map(chapter => (
+              <li key={chapter.id}>{chapter.title}</li>
             ))}
           </ul>
           <p>每个章节将：</p>
@@ -264,7 +291,7 @@ export const PromptTemplateManager: React.FC = () => {
         try {
           message.loading({ content: '正在批量生成所有章节 Prompt...', key: 'batch-gen', duration: 0 });
 
-          const result = await generateAllChaptersPrompts();
+          const result = await generateAllChaptersPrompts(projectId);
 
           if (result.success) {
             message.success({
@@ -273,10 +300,9 @@ export const PromptTemplateManager: React.FC = () => {
               duration: 5
             });
 
-            // Show detailed results
             const successChapters = result.results
               .filter(r => r.success)
-              .map(r => getChapterLabel(r.chapter, r.chapter_name));
+              .map(r => findChapterTitle(chapters, r.chapter));
             const failedChapters = result.results.filter(r => !r.success);
 
             if (successChapters.length > 0) {
@@ -284,12 +310,12 @@ export const PromptTemplateManager: React.FC = () => {
             }
             if (failedChapters.length > 0) {
               failedChapters.forEach(fc => {
-                message.error(`${getChapterLabel(fc.chapter, fc.chapter_name)} 生成失败：${fc.error}`);
+                message.error(`${findChapterTitle(chapters, fc.chapter)} 生成失败：${fc.error}`);
               });
             }
 
-            // Reload templates
             loadTemplates();
+            onTemplatesChanged?.();
           } else {
             message.error({ content: '批量生成失败', key: 'batch-gen' });
           }
@@ -303,14 +329,15 @@ export const PromptTemplateManager: React.FC = () => {
     });
   };
 
-  const groupedTemplates = templates.reduce((acc, template) => {
-    const key = template.chapter as PromptChapterType;
-    if (!acc[key]) {
-      acc[key] = [];
-    }
-    acc[key].push(template);
-    return acc;
-  }, {} as Record<PromptChapterType, Template[]>);
+  const groupedTemplates = useMemo(() => {
+    return templates.reduce((acc: Record<string, Template[]>, template) => {
+      if (!acc[template.chapter]) {
+        acc[template.chapter] = [];
+      }
+      acc[template.chapter].push(template);
+      return acc;
+    }, {} as Record<string, Template[]>);
+  }, [templates]);
 
   if (loading) {
     return (
@@ -332,7 +359,7 @@ export const PromptTemplateManager: React.FC = () => {
           icon={<ThunderboltOutlined />}
           onClick={handleBatchGenerate}
           loading={generating}
-          disabled={!hasExamples}
+          disabled={!hasExamples || chapters.length === 0}
           style={{ backgroundColor: '#52c41a', color: 'white', borderColor: '#52c41a' }}
         >
           一键生成所有章节
@@ -343,7 +370,7 @@ export const PromptTemplateManager: React.FC = () => {
         message="模板说明"
         description={
           <div>
-            <p>• 每个章节可以有多个Prompt模板</p>
+            <p>• 每个章节可以有多个 Prompt 模板</p>
             <p>• 生成报告时可以选择使用哪个模板</p>
             <p>• 标记为默认的模板会在未选择时自动使用</p>
             <p>• 占位符：<code>{'{data_summary}'}</code> 数据摘要，<code>{'{examples_text}'}</code> 示例文档</p>
@@ -354,85 +381,89 @@ export const PromptTemplateManager: React.FC = () => {
         style={{ marginBottom: 16 }}
       />
 
-      {CHAPTER_KEYS.map((chapter) => {
-        const chapterTemplates = groupedTemplates[chapter] || [];
-        return (
-          <Card
-            key={chapter}
-            title={CHAPTER_NAMES[chapter]}
-            extra={
-              <Button
-                type="dashed"
-                icon={<BulbOutlined />}
-                onClick={() => handleGenerateFromExamples(chapter)}
-                loading={generating}
-                disabled={!hasExamples}
-              >
-                AI 生成 Prompt
-              </Button>
-            }
-            style={{ marginBottom: 16 }}
-          >
-            {chapterTemplates.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#999', padding: '24px 0' }}>
-                暂无模板，请手动创建或使用“一键生成所有章节”
-              </div>
-            ) : (
-              <List
-                dataSource={chapterTemplates}
-                renderItem={(template) => (
-                  <List.Item
-                    actions={[
-                      template.is_default ? (
-                        <Tag color="gold" icon={<StarFilled />}>默认</Tag>
-                      ) : (
+      {chapters.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#999' }}>
+          项目尚未配置章节，请先上传参考文档完成初始化。
+        </div>
+      ) : (
+        chapters.map(chapter => {
+          const chapterTemplates = groupedTemplates[chapter.id] || [];
+          return (
+            <Card
+              key={chapter.id}
+              title={chapter.title}
+              extra={
+                <Button
+                  type="dashed"
+                  icon={<BulbOutlined />}
+                  onClick={() => handleGenerateFromExamples(chapter.id)}
+                  loading={generating}
+                  disabled={!hasExamples}
+                >
+                  AI 生成 Prompt
+                </Button>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              {chapterTemplates.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#999', padding: '24px 0' }}>
+                  暂无模板，请手动创建或使用“一键生成所有章节”
+                </div>
+              ) : (
+                <List
+                  dataSource={chapterTemplates}
+                  renderItem={(template) => (
+                    <List.Item
+                      actions={[
+                        template.is_default ? (
+                          <Tag color="gold" icon={<StarFilled />}>默认</Tag>
+                        ) : (
+                          <Button
+                            size="small"
+                            icon={<StarOutlined />}
+                            onClick={() => handleSetDefault(template)}
+                          >
+                            设为默认
+                          </Button>
+                        ),
                         <Button
                           size="small"
-                          icon={<StarOutlined />}
-                          onClick={() => handleSetDefault(template)}
+                          icon={<EditOutlined />}
+                          onClick={() => handleEdit(template)}
                         >
-                          设为默认
-                        </Button>
-                      ),
-                      <Button
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => handleEdit(template)}
-                      >
-                        编辑
-                      </Button>,
-                      <Popconfirm
-                        title="确定要删除这个模板吗？"
-                        onConfirm={() => handleDelete(template.id)}
-                        okText="确定"
-                        cancelText="取消"
-                      >
-                        <Button size="small" danger icon={<DeleteOutlined />}>
-                          删除
-                        </Button>
-                      </Popconfirm>
-                    ]}
-                  >
-                    <List.Item.Meta
-                      title={template.name}
-                      description={
-                        <div>
-                          <div style={{ fontSize: 12, color: '#999' }}>
-                            System Prompt: {template.system_prompt.substring(0, 50)}...
+                          编辑
+                        </Button>,
+                        <Popconfirm
+                          title="确定要删除这个模板吗？"
+                          onConfirm={() => handleDelete(template.id)}
+                          okText="确定"
+                          cancelText="取消"
+                        >
+                          <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                        </Popconfirm>
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={template.name}
+                        description={
+                          <div>
+                            <div style={{ fontSize: 12, color: '#999' }}>
+                              System Prompt: {template.system_prompt.substring(0, 50)}...
+                            </div>
+                            <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                              更新时间: {new Date(template.updated_at).toLocaleString()}
+                            </div>
                           </div>
-                          <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                            更新时间: {new Date(template.updated_at).toLocaleString()}
-                          </div>
-                        </div>
-                      }
-                    />
-                  </List.Item>
-                )}
-              />
-            )}
-          </Card>
-        );
-      })}
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              )}
+            </Card>
+          );
+        })
+      )}
 
       <Modal
         title={editingTemplate ? '编辑模板' : '新建模板'}
@@ -459,9 +490,9 @@ export const PromptTemplateManager: React.FC = () => {
               rules={[{ required: true, message: '请选择章节' }]}
             >
               <Select placeholder="选择章节">
-                {CHAPTER_KEYS.map((key) => (
-                  <Option key={key} value={key}>
-                    {CHAPTER_NAMES[key]}
+                {chapters.map(chapter => (
+                  <Option key={chapter.id} value={chapter.id}>
+                    {chapter.title}
                   </Option>
                 ))}
               </Select>

@@ -1,23 +1,28 @@
 """Prompt generator service for creating templates from examples"""
 
-from pathlib import Path
 from .data_processor import DataProcessor
 from .llm_service import LLMService
 from .example_manager import ExampleManager
+from .project_manager import ProjectManager
+from .prompt_manager import PromptManager
+from .chapter_parser import ChapterParser
 
 
 class PromptGenerator:
     """Generate prompt templates by analyzing example documents"""
 
-    def __init__(self):
+    def __init__(self, project_id: str):
+        self.project_id = ProjectManager.resolve_project_id(project_id)
         self.data_processor = DataProcessor()
         self.llm_service = LLMService()
-        self.example_manager = ExampleManager()
+        self.example_manager = ExampleManager(self.project_id)
+        self.chapter_parser = ChapterParser()
 
     def generate_from_examples(
         self,
         example_file_ids: list[str],
-        chapter_type: str
+        chapter_type: str,
+        chapter_title: str | None = None
     ) -> dict:
         """Generate prompt template from multiple example documents
 
@@ -47,40 +52,37 @@ class PromptGenerator:
                     print(f"[PromptGenerator] Warning: Example {file_id} not found, skipping")
                     continue
 
-                # Construct file path - check both with original name and with file_id
-                file_found = False
-                file_path = None
-
-                # Try with file ID and different extensions
-                for ext in ['.docx', '.doc', '.md', '.markdown']:
-                    potential_path = Path("examples") / f"{file_id}{ext}"
-                    if potential_path.exists():
-                        file_path = potential_path
-                        file_found = True
-                        break
-
-                # Also try with original filename
-                if not file_found:
-                    potential_path = Path("examples") / example["name"]
-                    if potential_path.exists():
-                        file_path = potential_path
-                        file_found = True
-
-                if not file_found:
+                file_path = self.example_manager.get_example_file_path(file_id)
+                if not file_path:
                     print(f"[PromptGenerator] Warning: File not found for {file_id} ({example['name']}), skipping")
                     continue
 
                 # Read example file
                 content = self.data_processor.read_example_file(str(file_path))
 
-                # Extract specific chapter
-                chapter_content = self.data_processor._extract_chapter_from_example(
-                    content, chapter_type
-                )
+                # Parse document into chapters and locate target
+                parsed_chapters = self.chapter_parser.parse(content)
+                matched_content = None
 
-                if chapter_content:
-                    chapter_contents.append(chapter_content)
-                    print(f"[PromptGenerator] Extracted {len(chapter_content)} chars from {example['name']}")
+                if parsed_chapters:
+                    if chapter_title:
+                        for parsed in parsed_chapters:
+                            if parsed.title.strip() == chapter_title.strip():
+                                matched_content = parsed.content
+                                break
+                    if matched_content is None:
+                        # Fallback to matching by order using chapter index if names differ
+                        project_chapters = ProjectManager.get_chapters(self.project_id)
+                        index = next(
+                            (i for i, item in enumerate(project_chapters) if item["id"] == chapter_type),
+                            None
+                        )
+                        if index is not None and index < len(parsed_chapters):
+                            matched_content = parsed_chapters[index].content
+
+                if matched_content:
+                    chapter_contents.append(matched_content)
+                    print(f"[PromptGenerator] Extracted {len(matched_content)} chars from {example['name']}")
 
             except Exception as e:
                 print(f"[PromptGenerator] Error processing example {file_id}: {e}")
@@ -94,8 +96,11 @@ class PromptGenerator:
         # Analyze examples and generate prompt
         result = self.llm_service.analyze_examples_and_generate_prompt(
             chapter_contents=chapter_contents,
-            chapter_type=chapter_type
+            chapter_type=chapter_type,
+            chapter_title=chapter_title
         )
+
+        result = self._apply_canonical_template(chapter_type, result)
 
         # Add metadata
         result["analyzed_examples"] = len(chapter_contents)
@@ -103,7 +108,7 @@ class PromptGenerator:
 
         return result
 
-    def generate_from_all_examples(self, chapter_type: str) -> dict:
+    def generate_from_all_examples(self, chapter_type: str, chapter_title: str | None = None) -> dict:
         """Generate prompt from all available example documents
 
         Args:
@@ -122,5 +127,32 @@ class PromptGenerator:
 
         return self.generate_from_examples(
             example_file_ids=example_ids,
-            chapter_type=chapter_type
+            chapter_type=chapter_type,
+            chapter_title=chapter_title
         )
+
+    def generate_from_chapter_content(self, chapter_type: str, chapter_title: str, content: str) -> dict:
+        """Generate prompt template directly from chapter content"""
+        if not content.strip():
+            raise ValueError("Chapter content is empty")
+
+        result = self.llm_service.analyze_examples_and_generate_prompt(
+            chapter_contents=[content],
+            chapter_type=chapter_type,
+            chapter_title=chapter_title
+        )
+
+        result = self._apply_canonical_template(chapter_type, result)
+
+        result["analyzed_examples"] = 1
+        result["chapter_type"] = chapter_type
+        return result
+
+    def _apply_canonical_template(self, chapter_type: str, result: dict) -> dict:
+        """Apply canonical template overrides for default project if available."""
+        if self.project_id == ProjectManager.DEFAULT_PROJECT_ID:
+            canonical = PromptManager.get_canonical_template(chapter_type)
+            if canonical:
+                result["system_prompt"] = canonical.get("system_prompt", result.get("system_prompt"))
+                result["user_prompt_template"] = canonical.get("user_prompt_template", result.get("user_prompt_template"))
+        return result

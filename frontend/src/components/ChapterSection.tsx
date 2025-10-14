@@ -3,12 +3,11 @@ import { Card, Space, Button, Select, Typography } from 'antd';
 import { PlayCircleOutlined } from '@ant-design/icons';
 import { DataInput } from './DataInput';
 import { ReportEditor } from './ReportEditor';
-import type { ChapterType } from '../services/api';
 
 interface PromptTemplate {
   id: string;
   name: string;
-  chapter: ChapterType;
+  chapter: string;
   system_prompt: string;
   user_prompt_template: string;
   is_default: boolean;
@@ -52,10 +51,8 @@ export const ChapterSection: React.FC<ChapterSectionProps> = ({
   templates,
   selectedTemplateId,
   onTemplateSelect,
-  exampleFiles
+  exampleFiles: _exampleFiles
 }) => {
-  const hasExamples = exampleFiles.length > 0;
-
   return (
     <Card
       bordered={false}
@@ -85,22 +82,6 @@ export const ChapterSection: React.FC<ChapterSectionProps> = ({
                 onChange={onDataChange}
                 rows={20}
               />
-
-              {hasExamples && (
-                <Card
-                  size="small"
-                  style={{
-                    background: '#f0f9ff',
-                    borderColor: '#91caff'
-                  }}
-                >
-                  <Text strong>📚 已加载 {exampleFiles.length} 个示例文档</Text>
-                  <br />
-                  <Text type="secondary">
-                    {exampleFiles.map(file => file.name).join('，')}
-                  </Text>
-                </Card>
-              )}
 
               <div>
                 <Text strong>选择 Prompt 模板</Text>

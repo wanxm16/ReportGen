@@ -2,107 +2,91 @@
 
 import json
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List, Optional
 
-EXAMPLES_DIR = Path("examples")
-INDEX_FILE = EXAMPLES_DIR / "index.json"
+from .project_manager import ProjectManager
 
 
 class ExampleManager:
-    """Manage example file metadata"""
+    """Manage example file metadata within a project"""
 
-    @staticmethod
-    def load_index() -> List[Dict[str, str]]:
-        """Load example files index
+    SUPPORTED_EXTENSIONS = ['.md', '.markdown', '.docx', '.doc']
 
-        Returns:
-            List of example file metadata
-        """
-        if not INDEX_FILE.exists():
+    def __init__(self, project_id: Optional[str] = None):
+        self.project_id = ProjectManager.resolve_project_id(project_id)
+        self.paths = ProjectManager.ensure_project_dirs(self.project_id)
+        self.examples_dir = self.paths.examples_dir
+        self.index_file = self.paths.example_index_file
+
+    @classmethod
+    def for_project(cls, project_id: Optional[str] = None) -> "ExampleManager":
+        """Factory helper to create manager for a given project"""
+        return cls(project_id)
+
+    def _load_index(self) -> List[Dict[str, str]]:
+        if not self.index_file.exists():
             return []
 
         try:
-            with open(INDEX_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Warning: Failed to load example index: {e}")
+            with open(self.index_file, 'r', encoding='utf-8') as file:
+                return json.load(file)
+        except Exception as exc:
+            print(f"Warning: Failed to load example index for project {self.project_id}: {exc}")
             return []
 
-    @staticmethod
-    def save_index(examples: List[Dict[str, str]]) -> None:
-        """Save example files index
-
-        Args:
-            examples: List of example file metadata
-        """
+    def _save_index(self, examples: List[Dict[str, str]]) -> None:
         try:
-            EXAMPLES_DIR.mkdir(exist_ok=True)
-            with open(INDEX_FILE, 'w', encoding='utf-8') as f:
-                json.dump(examples, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Error: Failed to save example index: {e}")
+            self.examples_dir.mkdir(parents=True, exist_ok=True)
+            with open(self.index_file, 'w', encoding='utf-8') as file:
+                json.dump(examples, file, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            print(f"Error: Failed to save example index for project {self.project_id}: {exc}")
             raise
 
-    @staticmethod
-    def add_example(file_id: str, filename: str) -> None:
-        """Add an example file to the index
+    def add_example(self, file_id: str, filename: str) -> None:
+        """Add an example file to the index"""
+        examples = self._load_index()
 
-        Args:
-            file_id: Unique file ID
-            filename: Original filename
-        """
-        examples = ExampleManager.load_index()
-
-        # Check if already exists
-        if any(ex['id'] == file_id for ex in examples):
+        if any(example['id'] == file_id for example in examples):
             return
 
         examples.append({
-            'id': file_id,
-            'name': filename
+            "id": file_id,
+            "name": filename
         })
 
-        ExampleManager.save_index(examples)
+        self._save_index(examples)
 
-    @staticmethod
-    def remove_example(file_id: str) -> None:
-        """Remove an example file from the index
+    def replace_examples(self, items: List[Dict[str, str]]) -> None:
+        """Replace index with provided entries."""
+        self._save_index(items)
 
-        Args:
-            file_id: File ID to remove
-        """
-        examples = ExampleManager.load_index()
-        examples = [ex for ex in examples if ex['id'] != file_id]
-        ExampleManager.save_index(examples)
+    def remove_example(self, file_id: str) -> None:
+        """Remove an example file from the index and delete the actual file"""
+        examples = self._load_index()
+        examples = [example for example in examples if example['id'] != file_id]
+        self._save_index(examples)
 
-        # Also delete the physical file
-        for ext in ['.md', '.markdown', '.docx', '.doc']:
-            file_path = EXAMPLES_DIR / f"{file_id}{ext}"
-            if file_path.exists():
-                file_path.unlink()
-                break
+        file_path = self.get_example_file_path(file_id)
+        if file_path and file_path.exists():
+            file_path.unlink()
 
-    @staticmethod
-    def get_all_examples() -> List[Dict[str, str]]:
-        """Get all example files
+    def get_all_examples(self) -> List[Dict[str, str]]:
+        """Get all example files"""
+        return self._load_index()
 
-        Returns:
-            List of example file metadata
-        """
-        return ExampleManager.load_index()
-
-    @staticmethod
-    def get_example_by_id(file_id: str) -> Dict[str, str]:
-        """Get example file by ID
-
-        Args:
-            file_id: File ID to search for
-
-        Returns:
-            Example file metadata or None if not found
-        """
-        examples = ExampleManager.load_index()
+    def get_example_by_id(self, file_id: str) -> Optional[Dict[str, str]]:
+        """Get example file by ID"""
+        examples = self._load_index()
         for example in examples:
             if example['id'] == file_id:
                 return example
+        return None
+
+    def get_example_file_path(self, file_id: str) -> Optional[Path]:
+        """Get path to example file for given id if it exists"""
+        for ext in self.SUPPORTED_EXTENSIONS:
+            potential_path = self.examples_dir / f"{file_id}{ext}"
+            if potential_path.exists():
+                return potential_path
         return None

@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api import upload, report, prompts
+from .api import upload, report, prompts, projects
 from pathlib import Path
 
 # Create upload directories
@@ -29,6 +29,7 @@ app.add_middleware(
 app.include_router(upload.router)
 app.include_router(report.router)
 app.include_router(prompts.router)
+app.include_router(projects.router)
 
 
 @app.get("/")
