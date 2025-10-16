@@ -17,7 +17,8 @@ import {
   FolderOpenOutlined,
   SettingOutlined,
   EyeOutlined,
-  PlusOutlined
+  PlusOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 
 import { ChapterSection } from './components/ChapterSection';
@@ -37,6 +38,7 @@ import {
   seedProject,
   getChapterData,
   saveChapterData,
+  clearGeneratedContent,
   type Project,
   type ProjectChapter
 } from './services/api';
@@ -136,6 +138,7 @@ function App() {
   const [seedModalVisible, setSeedModalVisible] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
+  const [clearingReports, setClearingReports] = useState(false);
   const [seedUploading, setSeedUploading] = useState(false);
   const [seedFile, setSeedFile] = useState<File | null>(null);
   const [seedProjectId, setSeedProjectId] = useState<string | null>(null);
@@ -545,6 +548,53 @@ function App() {
     }
   };
 
+  const handleClearGenerated = () => {
+    if (!activeProjectId) {
+      message.error('请先选择项目');
+      return;
+    }
+
+    const projectName = projects.find(project => project.id === activeProjectId)?.name || activeProjectId;
+
+    Modal.confirm({
+      title: '清空报告内容',
+      content: `确定要清空项目“${projectName}”中所有章节的报告内容吗？输入数据将会保留。`,
+      okText: '清空',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setClearingReports(true);
+        return clearGeneratedContent(activeProjectId)
+          .then(result => {
+            updateProjectState(activeProjectId, state => {
+              const clearedContents: Record<string, string> = {};
+              Object.keys(state.chapterContents).forEach(key => {
+                clearedContents[key] = '';
+              });
+              return {
+                ...state,
+                chapterContents: clearedContents
+              };
+            });
+            const clearedCount = result.cleared_chapters.length;
+            if (clearedCount > 0) {
+              message.success(`已清空 ${clearedCount} 个章节的报告内容`);
+            } else {
+              message.success('报告内容已清空');
+            }
+          })
+          .catch((error: any) => {
+            const detail = error.response?.data?.detail || error.message || '清空失败';
+            message.error(detail);
+            return Promise.reject(error);
+          })
+          .finally(() => {
+            setClearingReports(false);
+          });
+      }
+    });
+  };
+
   const handleChapterTabChange = (chapterId: string) => {
     const ref = chapterRefs[chapterId]?.current;
     if (ref) {
@@ -739,6 +789,15 @@ function App() {
               size="small"
               style={{ minWidth: 320 }}
             />
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              onClick={handleClearGenerated}
+              disabled={!hasPartialContent || clearingReports}
+              loading={clearingReports}
+            >
+              清空生成内容
+            </Button>
             <Button
               icon={<EyeOutlined />}
               onClick={() => setIsPreviewVisible(true)}

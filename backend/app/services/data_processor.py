@@ -181,34 +181,24 @@ class DataProcessor:
                 # Extract all text from paragraphs and tables
                 text_parts = []
 
-                for element in doc.element.body:
-                    # Handle paragraphs
-                    if element.tag.endswith('p'):
-                        para_text = ''.join(node.text for node in element.iter() if hasattr(node, 'text') and node.text)
-                        if para_text.strip():
-                            text_parts.append(para_text)
+                # Use the simpler paragraph.text approach to avoid duplication
+                for para in doc.paragraphs:
+                    if para.text.strip():
+                        text_parts.append(para.text)
 
-                    # Handle tables
-                    elif element.tag.endswith('tbl'):
-                        # Convert table to markdown format
-                        table = None
-                        for tbl in doc.tables:
-                            if tbl._element == element:
-                                table = tbl
-                                break
+                # Handle tables separately
+                for table in doc.tables:
+                    # Create markdown table
+                    rows = []
+                    for i, row in enumerate(table.rows):
+                        cells = [cell.text.strip() if cell.text else '' for cell in row.cells]
+                        rows.append('| ' + ' | '.join(cells) + ' |')
 
-                        if table:
-                            # Create markdown table
-                            rows = []
-                            for i, row in enumerate(table.rows):
-                                cells = [cell.text.strip() if cell.text else '' for cell in row.cells]
-                                rows.append('| ' + ' | '.join(cells) + ' |')
+                        # Add separator after header row
+                        if i == 0:
+                            rows.append('| ' + ' | '.join(['---'] * len(cells)) + ' |')
 
-                                # Add separator after header row
-                                if i == 0:
-                                    rows.append('| ' + ' | '.join(['---'] * len(cells)) + ' |')
-
-                            text_parts.append('\n'.join(rows))
+                    text_parts.append('\n'.join(rows))
 
                 return '\n\n'.join(text_parts)
             else:

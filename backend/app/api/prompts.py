@@ -12,6 +12,9 @@ from ..models import (
 from ..services.project_manager import ProjectManager
 from ..services.prompt_manager import PromptManager
 from ..services.prompt_generator import PromptGenerator
+from ..services.example_manager import ExampleManager
+from ..services.chapter_parser import ChapterParser
+from ..services.data_processor import DataProcessor
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
@@ -230,6 +233,63 @@ async def generate_prompt_from_examples(request: GeneratePromptRequest):
             status_code=500,
             detail=f"Failed to generate prompt: {str(e)}"
         )
+
+
+@router.get("/debug/parse-example/{example_id}")
+async def debug_parse_example(example_id: str, project_id: Optional[str] = None):
+    """Debug endpoint to see how an example file is parsed into chapters
+
+    Args:
+        example_id: Example file ID to parse
+        project_id: Optional project ID
+
+    Returns:
+        Parsed chapters with titles and content previews
+    """
+    try:
+        resolved_project_id = ProjectManager.resolve_project_id(project_id)
+        example_manager = ExampleManager(resolved_project_id)
+        chapter_parser = ChapterParser()
+        data_processor = DataProcessor()
+
+        # Get example file
+        example = example_manager.get_example_by_id(example_id)
+        if not example:
+            raise HTTPException(status_code=404, detail=f"Example not found: {example_id}")
+
+        file_path = example_manager.get_example_file_path(example_id)
+        if not file_path:
+            raise HTTPException(status_code=404, detail=f"File not found for example: {example_id}")
+
+        # Read and parse the file
+        content = data_processor.read_example_file(str(file_path))
+        parsed_chapters = chapter_parser.parse(content)
+
+        # Get project chapters for comparison
+        project_chapters = ProjectManager.get_chapters(resolved_project_id)
+
+        return {
+            "success": True,
+            "example_id": example_id,
+            "example_name": example["name"],
+            "project_chapters": [{"id": ch["id"], "title": ch.get("title", ch["id"])} for ch in project_chapters],
+            "parsed_chapters": [
+                {
+                    "index": i,
+                    "title": ch.title,
+                    "content_length": len(ch.content),
+                    "content_preview": ch.content[:500] + "..." if len(ch.content) > 500 else ch.content
+                }
+                for i, ch in enumerate(parsed_chapters)
+            ],
+            "total_parsed": len(parsed_chapters)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[API] Error parsing example: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse example: {str(e)}")
 
 
 @router.post("/generate-all-chapters")

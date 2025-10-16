@@ -99,6 +99,20 @@ async def save_chapter_data(project_id: str, chapter_id: str, payload: Dict[str,
         raise HTTPException(status_code=500, detail=f"Failed to save chapter data: {exc}")
 
 
+@router.post("/{project_id}/clear-generated")
+async def clear_generated_chapters(project_id: str):
+    """Clear all generated report content for a project while preserving input data."""
+    try:
+        ProjectManager.get_project(project_id)
+        storage = ProjectStorage(project_id)
+        result = storage.clear_generated_content()
+        return {"success": True, **result}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to clear generated content: {exc}")
+
+
 @router.post("/{project_id}/seed")
 async def seed_project_from_document(project_id: str, file: UploadFile = File(...)):
     """Seed a project by uploading a reference document for automatic prompt generation."""

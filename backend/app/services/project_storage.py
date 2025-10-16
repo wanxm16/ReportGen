@@ -85,3 +85,37 @@ class ProjectStorage:
         self._save(payload)
         return entry
 
+    def clear_generated_content(self, chapter_id: str | None = None) -> Dict[str, Any]:
+        payload = self._load()
+        chapters = payload.setdefault("chapters", {})
+        cleared: list[str] = []
+        now = datetime.utcnow().isoformat()
+
+        def _clear(entry: Dict[str, Any]) -> bool:
+            original = entry.get("generated_content", "")
+            if original != "":
+                entry["generated_content"] = ""
+                entry["updated_at"] = now
+                return True
+            if original is None:
+                entry["generated_content"] = ""
+                entry["updated_at"] = now
+                return True
+            return False
+
+        if chapter_id:
+            entry = chapters.get(chapter_id)
+            if entry and _clear(entry):
+                cleared.append(chapter_id)
+        else:
+            for chapter_key, entry in chapters.items():
+                if _clear(entry):
+                    cleared.append(chapter_key)
+
+        if cleared:
+            self._save(payload)
+
+        return {
+            "project_id": self.project_id,
+            "cleared_chapters": cleared
+        }

@@ -234,18 +234,31 @@ export const PromptTemplateManager: React.FC<PromptTemplateManagerProps> = ({
 
           const result = await generatePromptFromExamples(chapterId, chapterTitle, projectId);
 
-          message.success({ content: `成功分析 ${result.analyzed_examples} 个示例`, key: 'generating' });
-
-          form.setFieldsValue({
+          // Automatically save the generated template
+          const payload = {
             name: `AI 生成 - ${chapterTitle}`,
             chapter: chapterId,
             system_prompt: result.system_prompt,
             user_prompt_template: result.user_prompt_template,
-            is_default: false
+            is_default: false,
+            project_id: projectId
+          };
+
+          const response = await fetch(`${API_BASE}/templates`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
           });
 
-          setEditingTemplate(null);
-          setModalVisible(true);
+          if (!response.ok) throw new Error('创建模板失败');
+
+          message.success({
+            content: `成功分析 ${result.analyzed_examples} 个示例并创建模板`,
+            key: 'generating'
+          });
+
+          loadTemplates();
+          onTemplatesChanged?.();
         } catch (error: any) {
           message.error({ content: error.message || '生成失败', key: 'generating' });
           console.error('Generate prompt error:', error);

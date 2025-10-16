@@ -170,6 +170,19 @@ export const saveChapterData = async (
   return response.data;
 };
 
+export interface ClearGeneratedResponse {
+  success: boolean;
+  project_id: string;
+  cleared_chapters: string[];
+}
+
+export const clearGeneratedContent = async (projectId: string): Promise<ClearGeneratedResponse> => {
+  const response = await axios.post<ClearGeneratedResponse>(
+    `${API_BASE_URL}/projects/${projectId}/clear-generated`
+  );
+  return response.data;
+};
+
 // Generate prompt template from example documents
 export interface GeneratePromptResponse {
   success: boolean;

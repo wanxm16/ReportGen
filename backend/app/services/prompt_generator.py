@@ -100,8 +100,6 @@ class PromptGenerator:
             chapter_title=chapter_title
         )
 
-        result = self._apply_canonical_template(chapter_type, result)
-
         # Add metadata
         result["analyzed_examples"] = len(chapter_contents)
         result["chapter_type"] = chapter_type
@@ -142,17 +140,6 @@ class PromptGenerator:
             chapter_title=chapter_title
         )
 
-        result = self._apply_canonical_template(chapter_type, result)
-
         result["analyzed_examples"] = 1
         result["chapter_type"] = chapter_type
-        return result
-
-    def _apply_canonical_template(self, chapter_type: str, result: dict) -> dict:
-        """Apply canonical template overrides for default project if available."""
-        if self.project_id == ProjectManager.DEFAULT_PROJECT_ID:
-            canonical = PromptManager.get_canonical_template(chapter_type)
-            if canonical:
-                result["system_prompt"] = canonical.get("system_prompt", result.get("system_prompt"))
-                result["user_prompt_template"] = canonical.get("user_prompt_template", result.get("user_prompt_template"))
         return result

@@ -160,6 +160,19 @@ class PromptManager:
                 if chapter not in templates or not templates[chapter]:
                     templates[chapter] = copy.deepcopy(default_list)
                     updated = True
+                else:
+                    # Ensure default template exists in the list
+                    has_default = any(
+                        t.get('id') == f"default_{chapter}"
+                        for t in templates[chapter]
+                    )
+                    if not has_default:
+                        # Insert default template at the beginning
+                        default_template = PromptManager.get_canonical_template(chapter)
+                        if default_template:
+                            templates[chapter].insert(0, default_template)
+                            updated = True
+
             if updated:
                 PromptManager._save_all_templates(project_id, templates)
 
@@ -181,79 +194,139 @@ class PromptManager:
     def get_canonical_template(chapter: str) -> Optional[Dict]:
         """Return canonical default template for a chapter."""
         defaults = _build_default_templates()
-        base = copy.deepcopy(defaults.get(chapter, [{}])[0]) if defaults.get(chapter) else None
-        overrides: Dict[str, Dict[str, str]] = {
+        canonical_map: Dict[str, Dict[str, str]] = {
+            "chapter_1": {
+                "name": "默认模板 - 全区社会治理基本情况",
+                "system_prompt": "你是一位专业的社会治理数据分析师，擅长撰写规范的政府工作报告，能够准确解读事件数据并用结构化语言呈现分析结果。",
+                "user_prompt_template": (
+                    "请根据以下数据生成结构完整的《一、全区社会治理基本情况》章节。\n\n"
+                    "# 数据\n{data_summary}\n\n"
+                    "# 输出结构\n"
+                    "## （一）总体概况\n"
+                    "- 用 3~4 句总结当月事件总量、环比变化、高价值事件情况等核心结论。\n\n"
+                    "## （二）事件流转与办结情况\n"
+                    "- 使用 Markdown 表格呈现关键指标：\n"
+                    "| 平台/渠道 | 指标 | 一级 | 二级 | 三级 | 四级 | 五级 | 合计 | 办结率 |\n"
+                    "|-----------|------|------|------|------|------|------|------|--------|\n"
+                    "| 基层智治平台 | 总数 | …… | …… | …… | …… | …… | …… | …… |\n"
+                    "| 基层智治平台 | 环比 | …… | …… | …… | …… | …… | …… | / |\n"
+                    "| 网格上报 | 总数 | …… | …… | …… | …… | …… | …… | …… |\n"
+                    "| 网格上报 | 环比 | …… | …… | …… | …… | …… | …… | / |\n"
+                    "| 12345热线 | 总数 | …… | …… | …… | …… | …… | …… | …… |\n"
+                    "| 12345热线 | 环比 | …… | …… | …… | …… | …… | …… | / |\n"
+                    "| 合计 | 总数 | …… | …… | …… | …… | …… | …… | …… |\n"
+                    "| 合计 | 环比 | …… | …… | …… | …… | …… | …… | / |\n\n"
+                    "## （三）问题研判与亮点做法\n"
+                    "- 总结数据反映出的亮点和短板，各列 2~3 条要点。\n\n"
+                    "## （四）下一步工作建议\n"
+                    "- 至少列出 3 条建议，以“• 责任单位：…｜措施：…｜时限：…”格式呈现。\n\n"
+                    "# 写作要求\n"
+                    "- 保持正式、公文化的语言，逻辑清晰。\n"
+                    "- 数据引用准确，表格使用标准 Markdown 语法。\n"
+                    "- 建议具体可执行。\n\n"
+                    "{examples_text}"
+                )
+            },
             "chapter_2": {
+                "name": "默认模板 - 高频社会治理问题隐患分析研判",
                 "system_prompt": "你是一位资深社会治理风险分析师，擅长对高频社会治理问题和隐患进行研判、分级预警并提出针对性化解举措。请保持正式、专业的政府公文语气，逻辑清晰、数据准确。",
                 "user_prompt_template": (
                     "请根据以下数据生成结构完整的《二、高频社会治理问题隐患分析研判》章节。\n\n"
                     "# 数据\n{data_summary}\n\n"
-                    "# 写作要求\n"
-                    "1. 识别不少于 3 类高频问题，说明事件数量、占比及环比/同比变化；\n"
-                    "2. 对每类问题开展风险研判：成因、影响范围、潜在风险等级；\n"
-                    "3. 提出针对性化解举措，每类问题至少提供 2 条建议，明确责任单位、措施、时限；\n"
-                    "4. 结尾给出总体研判结论和下一步工作重点。\n\n"
-                    "# 输出格式\n"
-                    "## 二、高频社会治理问题隐患分析研判\n\n"
-                    "### （一）总体态势\n"
-                    "- 用 3~4 句概括总体事件量、环比趋势、重点领域。\n"
+                    "# 输出结构\n"
+                    "## （一）总体态势\n"
+                    "- 概括本月高频问题总量、占比及环比/同比变化。\n"
                     "- 使用 Markdown 表格呈现关键指标：\n"
                     "| 问题类型 | 当月数量 | 占比 | 环比 | 风险等级 | 主要诉求 |\n"
                     "|----------|----------|------|------|----------|----------|\n"
                     "| …… | …… | …… | …… | …… | …… |\n\n"
-                    "### （二）重点问题风险研判\n"
-                    "#### 1. ……问题\n"
-                    "- 数据概览：……\n"
-                    "- 风险研判：……（成因、影响范围、风险等级）\n"
-                    "- 典型案例或征兆：……\n\n"
-                    "### （三）重点领域预警建议\n"
+                    "## （二）重点问题风险研判\n"
+                    "针对每个主要问题类型，使用“### 1. ……问题”格式展开，内容包括：\n"
+                    "- 数据概览（数量、占比、环比/同比变化）\n"
+                    "- 风险研判（成因、影响范围、潜在风险等级）\n"
+                    "- 典型案例或征兆（使用“如：……”格式）\n\n"
+                    "## （三）预警与治理建议\n"
                     "- • 责任单位：……｜措施：……｜时限：……\n"
                     "- • 责任单位：……｜措施：……｜时限：……\n\n"
-                    "### （四）综合评估与下一步工作\n"
-                    "- ……（总结整体研判结论，明确下一阶段重点工作）\n\n"
-                    "# 注意事项\n"
-                    "- 表格使用标准 Markdown 语法，数据缺失用“/”；\n"
-                    "- 语言正式、客观，避免口语化或情绪化表达。\n\n"
+                    "## （四）综合评估与下一步工作\n"
+                    "- 总结整体风险态势、突出问题与下一阶段重点工作方向。\n\n"
+                    "# 写作要求\n"
+                    "- 语言正式、客观；数据与分析对应一致，不得重复。\n"
+                    "- 表格使用标准 Markdown 语法，缺失数据用“/”。\n\n"
                     "{examples_text}"
                 )
             },
             "chapter_3": {
+                "name": "默认模板 - 社情民意热点问题分析预警",
                 "system_prompt": "你是一位专业的舆情研判分析师，擅长基于民意数据进行热点风险预警。请保持政府公文风格，做到结构严谨、数据准确、语言精炼。",
                 "user_prompt_template": (
                     "请根据以下数据生成结构完整的《三、社情民意热点问题分析预警》章节。\n\n"
                     "# 数据\n{data_summary}\n\n"
-                    "# 要求\n"
-                    "1. 识别不少于 3 个热点问题，列出问题类型、数量、环比变化、主要诉求；\n"
-                    "2. 对每个热点开展风险研判，说明成因、影响范围、风险等级；\n"
-                    "3. 提出针对性预警或处置建议，明确责任单位、措施、时间节点；\n"
-                    "4. 结尾需给出总体预警结论。\n\n"
-                    "# 输出格式\n"
-                    "## 三、社情民意热点问题分析预警\n\n"
-                    "### （一）总体态势\n"
+                    "# 输出结构\n"
+                    "## （一）总体态势\n"
                     "- 概括整体诉求热点和波动趋势，列出关键数据。\n\n"
-                    "### （二）热点问题研判\n"
+                    "## （二）热点问题研判\n"
                     "#### 1. ……热点问题\n"
                     "- 数据概览：……\n"
                     "- 风险研判：……（成因、影响范围、风险等级）\n"
                     "- 典型案例：……\n\n"
-                    "### （三）预警建议\n"
+                    "## （三）预警建议\n"
                     "- • 责任单位：……｜措施：……｜时限：……\n"
                     "- • ……\n\n"
-                    "### （四）综合研判结论\n"
-                    "- ……总结整体风险态势与下一步预警重点。\n\n"
+                    "## （四）综合研判结论\n"
+                    "- 总结整体风险态势与下一步预警重点。\n\n"
+                    "# 写作要求\n"
+                    "- 语言正式、精炼；数据准确。\n\n"
                     "{examples_text}"
                 )
             },
             "chapter_4": {
-                "system_prompt": "你是一位专业的政府工作报告撰写专家，专注于事件处置解决情况分析。请保持正式、规范的公文语气，善于总结问题并提出可操作的建议。"
+                "name": "默认模板 - 事件处置解决情况分析",
+                "system_prompt": "你是一位专业的政府工作报告撰写专家，专注于事件处置解决情况分析。请保持正式、规范的公文语气，善于总结问题并提出可操作的建议。",
+                "user_prompt_template": (
+                    "请根据以下数据生成结构完整的《四、事件处置解决情况分析》章节。\n\n"
+                    "# 数据\n{data_summary}\n\n"
+                    "# 输出结构\n"
+                    "## （一）总体处置情况\n"
+                    "- 概述事件办结数量、办结率、环比变化等核心指标。\n"
+                    "- 提供整体办结与积案治理情况，指出亮点与短板。\n\n"
+                    "## （二）重点单位（镇街）处置表现\n"
+                    "- 使用 Markdown 表格列出关键单位办结量、办结率、环比变化。\n\n"
+                    "## （三）积案治理进展\n"
+                    "- 描述新增积案、办结积案、存量积案情况，对主要积案类型进行分析。\n\n"
+                    "## （四）存在的突出问题\n"
+                    "- 列出 2~3 条主要问题，说明表现与影响。\n\n"
+                    "## （五）下一步工作建议\n"
+                    "- 至少给出 3 条建议，格式为“• 责任单位：……｜措施：……｜时限：……”。\n\n"
+                    "# 写作要求\n"
+                    "- 语言正式、客观；建议具体可操作。\n\n"
+                    "{examples_text}"
+                )
             }
         }
-        if base:
-            if chapter in overrides:
-                base.update(overrides[chapter])
-            return base
-        if chapter in overrides:
-            return overrides[chapter]
+
+        if chapter in canonical_map:
+            template = canonical_map[chapter]
+            defaults_for_chapter = defaults.get(chapter)
+            if defaults_for_chapter:
+                canonical = copy.deepcopy(defaults_for_chapter[0])
+                canonical.update(template)
+                canonical["is_default"] = True
+                canonical["id"] = f"default_{chapter}"
+                return canonical
+            return {
+                "id": f"default_{chapter}",
+                "name": template.get("name", f"默认模板 - {chapter}"),
+                "chapter": chapter,
+                "system_prompt": template["system_prompt"],
+                "user_prompt_template": template["user_prompt_template"],
+                "is_default": True,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+
+        if defaults.get(chapter):
+            return copy.deepcopy(defaults[chapter][0])
         return None
 
     @staticmethod
