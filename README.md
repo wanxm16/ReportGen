@@ -11,6 +11,8 @@
 - 📄 **Word 导出**：一键导出为 Word 文档
 - 🔄 **章节独立 & 自动保存**：每个章节可独立生成、自动保存输入数据与生成结果
 - 🧩 **Prompt 模板管理**：支持按章节定义/重新生成 Prompt，默认模板自动保持统一格式
+- 🧹 **报告内容重置**：可一键清空当前项目全部章节的生成内容，输入数据将被保留
+- 🛠️ **调试工具**：提供示例解析调试接口，帮助排查章节匹配与模板生成问题
 - 📁 **多项目隔离**：支持新建项目、上传参考文档一键生成章节 Prompt；项目间数据互不影响
 - 🖨 **导出样式统一**：导出的 Word 文档默认使用宋体 (SimSun) 12 号字体
 
@@ -80,23 +82,20 @@ npm run dev
 
 ### 使用流程
 
-1. **管理示例文档（可选）**
-   - 进入"示例文档管理"页面
-   - 上传历史月报示例（支持 .md, .markdown, .docx, .doc 格式）
-   - 示例文档全局共享，对所有章节生效
+1. **选择或创建项目**
+   进入顶部项目选择框，选择默认项目或创建一个新项目。每个项目会独立保存章节数据、示例文档与 Prompt 模板。
 
-2. **生成报告**
-   - 进入"报告生成"页面
-   - 选择要生成的章节（第一章或第二章）
-   - 在左侧输入框粘贴数据（CSV 或 Markdown 表格格式）
-   - 点击"生成报告"按钮，系统将调用 LLM 生成报告内容
+2. **管理示例文档与 Prompt**
+   在“示例文档管理”中上传 Markdown/Word 示例，或使用 Prompt 模板管理器批量生成/调整章节 Prompt。系统会自动保存新模板并维持默认模板在列表首位。
 
-3. **编辑内容**
-   - 点击"编辑"按钮可以修改生成的内容
-   - 编辑完成后点击"保存"
+3. **准备数据并生成章节**
+   在“报告生成”页面，粘贴 CSV 或 Markdown 表格数据，选择章节并点击“生成报告”。可以指定模板和参考示例以获得更贴合需求的输出。
 
-4. **导出文档**
-   - 点击"导出 Word"按钮，下载 Word 格式的报告
+4. **查看、编辑与保存**
+   生成内容可直接在富文本编辑器中调整，变更会自动保存。可随时切换章节或预览整份报告。
+
+5. **导出或重置内容**
+   使用“预览整份报告”和“导出 Word”导出成果，或通过“清空生成内容”按钮一键清空当前项目所有章节的生成稿，输入数据不会被删除。
 
 ## 项目结构
 
@@ -126,9 +125,28 @@ EventReport/
 
 ### 主要 API 端点
 
-- `POST /api/upload/example` - 上传示例文档（Markdown 或 Word）
-- `POST /api/report/generate-with-text` - 根据文本数据生成报告章节
-- `POST /api/report/export` - 导出为 Word 文档
+**Projects**
+- `GET /api/projects`：列出项目；`POST /api/projects`：创建新项目
+- `GET /api/projects/{project_id}/chapters`：获取章节配置；`GET|POST /api/projects/{project_id}/chapters/{chapter_id}/data`：读取与保存章节数据
+- `POST /api/projects/{project_id}/clear-generated`：清空项目中所有章节的生成内容
+- `POST /api/projects/{project_id}/seed`：上传示例文档并自动生成章节 Prompt（项目初始化）
+
+**Upload**
+- `POST /api/upload/data`：上传 CSV 数据文件
+- `POST /api/upload/example`：上传示例文档（Markdown/Word）
+- `GET /api/upload/examples` / `DELETE /api/upload/example/{file_id}`：查询与删除示例文档
+
+**Prompts**
+- `GET /api/prompts/templates`：获取项目模板列表（支持章节过滤/单个模板）
+- `POST /api/prompts/templates`：创建模板；`PUT|DELETE /api/prompts/templates/{template_id}`：更新或删除模板
+- `POST /api/prompts/generate-from-examples`：根据示例文档生成单个章节 Prompt
+- `POST /api/prompts/generate-all-chapters`：批量生成全部章节 Prompt
+- `GET /api/prompts/debug/parse-example/{example_id}`：调试示例文档章节解析结果
+
+**Report**
+- `POST /api/report/generate-with-text`：根据粘贴的文本数据生成章节内容
+- `POST /api/report/generate`：基于上传的数据文件生成章节
+- `POST /api/report/export`：将 Markdown 内容导出为 Word 文档
 
 ## 配置说明
 
@@ -164,6 +182,10 @@ E002,环境保护,二级,街道B
 - Word 格式（.docx, .doc）
 
 系统会自动解析并提取内容，用于 LLM 学习语气风格和分析思路。
+
+## 维护工具
+
+- `backend/fix_duplicate_chapters.py`：扫描 `backend/projects/` 下已存在的项目，自动清理示例解析产生的重复章节标题，并为原始文件生成备份。
 
 ## 开发说明
 
