@@ -1,24 +1,27 @@
 """LLM service for calling DeepSeek API"""
 
-import os
+from __future__ import annotations
+
+from typing import Optional
+
 from openai import OpenAI
-from dotenv import load_dotenv
 
+from ..config import Settings, get_settings
 from ..constants import CHAPTER_DISPLAY_NAMES
-
-load_dotenv()
 
 
 class LLMService:
     """Service for interacting with DeepSeek LLM"""
 
-    def __init__(self):
-        self.api_key = os.getenv("DEEPSEEK_API_KEY")
-        self.base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-        self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    def __init__(self, settings: Optional[Settings] = None):
+        resolved_settings = settings or get_settings()
 
-        if not self.api_key:
+        if not resolved_settings.deepseek_api_key:
             raise ValueError("DEEPSEEK_API_KEY not found in environment variables")
+
+        self.api_key = resolved_settings.deepseek_api_key
+        self.base_url = resolved_settings.deepseek_base_url
+        self.model = resolved_settings.deepseek_model
 
         self.client = OpenAI(
             api_key=self.api_key,

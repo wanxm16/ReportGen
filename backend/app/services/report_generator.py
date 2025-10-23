@@ -18,9 +18,14 @@ logger = logging.getLogger(__name__)
 class ReportGenerator:
     """Generate report chapters using LLM"""
 
-    def __init__(self):
-        self.data_processor = DataProcessor()
-        self.llm_service = LLMService()
+    def __init__(
+        self,
+        *,
+        llm_service: Optional[LLMService] = None,
+        data_processor: Optional[DataProcessor] = None,
+    ):
+        self.data_processor = data_processor or DataProcessor()
+        self.llm_service = llm_service or LLMService()
 
     def generate_chapter(
         self,

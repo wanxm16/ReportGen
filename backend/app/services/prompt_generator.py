@@ -1,22 +1,32 @@
 """Prompt generator service for creating templates from examples"""
 
+from typing import Optional
+
+from .chapter_parser import ChapterParser
 from .data_processor import DataProcessor
-from .llm_service import LLMService
 from .example_manager import ExampleManager
+from .llm_service import LLMService
 from .project_manager import ProjectManager
 from .prompt_manager import PromptManager
-from .chapter_parser import ChapterParser
 
 
 class PromptGenerator:
     """Generate prompt templates by analyzing example documents"""
 
-    def __init__(self, project_id: str):
+    def __init__(
+        self,
+        project_id: str,
+        *,
+        llm_service: Optional[LLMService] = None,
+        data_processor: Optional[DataProcessor] = None,
+        example_manager: Optional[ExampleManager] = None,
+        chapter_parser: Optional[ChapterParser] = None,
+    ):
         self.project_id = ProjectManager.resolve_project_id(project_id)
-        self.data_processor = DataProcessor()
-        self.llm_service = LLMService()
-        self.example_manager = ExampleManager(self.project_id)
-        self.chapter_parser = ChapterParser()
+        self.data_processor = data_processor or DataProcessor()
+        self.llm_service = llm_service or LLMService()
+        self.example_manager = example_manager or ExampleManager(self.project_id)
+        self.chapter_parser = chapter_parser or ChapterParser()
 
     def generate_from_examples(
         self,
