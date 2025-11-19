@@ -35,8 +35,8 @@ if [ ! -f ".env" ]; then
 fi
 
 # 启动后端（后台运行）
-echo "启动 FastAPI 服务器 (端口 8000)..."
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+echo "启动 FastAPI 服务器 (端口 8001)..."
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 > ../backend.log 2>&1 &
 BACKEND_PID=$!
 echo "后端服务 PID: $BACKEND_PID"
 
@@ -57,7 +57,7 @@ if [ ! -d "node_modules" ]; then
 fi
 
 # 启动前端（后台运行）
-echo "启动 Vite 开发服务器 (端口 3000)..."
+echo "启动 Vite 开发服务器 (端口 3001)..."
 nohup npm run dev > ../frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "前端服务 PID: $FRONTEND_PID"
@@ -68,9 +68,9 @@ echo ""
 echo "================================"
 echo "服务启动完成!"
 echo "================================"
-echo "后端服务: http://localhost:8000"
-echo "前端服务: http://localhost:3000"
-echo "API 文档: http://localhost:8000/docs"
+echo "后端服务: http://localhost:8001"
+echo "前端服务: http://localhost:3001"
+echo "API 文档: http://localhost:8001/docs"
 echo ""
 echo "后端 PID: $BACKEND_PID (日志: backend.log)"
 echo "前端 PID: $FRONTEND_PID (日志: frontend.log)"

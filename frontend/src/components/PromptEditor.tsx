@@ -31,7 +31,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ onSave }) => {
   const loadPrompts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/prompts');
+      const response = await fetch('http://localhost:8001/api/prompts');
       const data = await response.json();
       setPrompts(data);
     } catch (error) {
@@ -47,7 +47,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ onSave }) => {
 
     setSaving(prev => ({ ...prev, [chapter]: true }));
     try {
-      const response = await fetch('http://localhost:8000/api/prompts', {
+      const response = await fetch('http://localhost:8001/api/prompts', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ onSave }) => {
 
   const handleReset = async (chapter: 'chapter_1' | 'chapter_2') => {
     try {
-      const response = await fetch(`http://localhost:8000/api/prompts/reset/${chapter}`, {
+      const response = await fetch(`http://localhost:8001/api/prompts/reset/${chapter}`, {
         method: 'POST',
       });
 

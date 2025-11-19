@@ -10,8 +10,7 @@ import {
   message,
   Popconfirm,
   Tag,
-  Spin,
-  Alert
+  Spin
 } from 'antd';
 import {
   PlusOutlined,
@@ -19,7 +18,6 @@ import {
   DeleteOutlined,
   StarOutlined,
   StarFilled,
-  QuestionCircleOutlined,
   BulbOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons';
@@ -45,7 +43,7 @@ interface Template {
   updated_at: string;
 }
 
-const API_BASE = 'http://localhost:8000/api/prompts';
+const API_BASE = 'http://localhost:8001/api/prompts';
 
 const findChapterTitle = (chapters: ProjectChapter[], chapterId: string) =>
   chapters.find(chapter => chapter.id === chapterId)?.title || chapterId;
@@ -378,21 +376,6 @@ export const PromptTemplateManager: React.FC<PromptTemplateManagerProps> = ({
           一键生成所有章节
         </Button>
       </div>
-
-      <Alert
-        message="模板说明"
-        description={
-          <div>
-            <p>• 每个章节可以有多个 Prompt 模板</p>
-            <p>• 生成报告时可以选择使用哪个模板</p>
-            <p>• 标记为默认的模板会在未选择时自动使用</p>
-            <p>• 占位符：<code>{'{data_summary}'}</code> 数据摘要，<code>{'{examples_text}'}</code> 示例文档</p>
-          </div>
-        }
-        type="info"
-        icon={<QuestionCircleOutlined />}
-        style={{ marginBottom: 16 }}
-      />
 
       {chapters.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#999' }}>

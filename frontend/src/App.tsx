@@ -190,7 +190,7 @@ function App() {
   const loadProjectTemplates = useCallback(
     async (projectId: string, chaptersOverride?: ProjectChapter[]) => {
       try {
-        const response = await fetch(`http://localhost:8000/api/prompts/templates?project_id=${projectId}`);
+        const response = await fetch(`http://localhost:8001/api/prompts/templates?project_id=${projectId}`);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
